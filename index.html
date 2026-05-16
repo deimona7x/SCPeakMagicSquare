@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peak and Magic Square - Timer de Respawn</title>
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Login/Register Modal -->
+    <div id="loginModal" class="login-modal">
+        <div class="login-content">
+            <h2>BEM-VINDO</h2>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
+                <button class="auth-tab" onclick="switchAuthTab('register')">Registre-se</button>
+            </div>
+
+            <!-- Login Form -->
+            <div id="formLogin" class="auth-form-container active">
+                <p>Identifique-se para acessar o painel</p>
+                <div class="login-form">
+                    <input type="email" id="loginEmail" placeholder="E-mail" required>
+                    <input type="password" id="loginPassword" placeholder="Senha" required>
+                    <button class="btn btn-purple" onclick="performLogin()">Entrar</button>
+                </div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="formRegister" class="auth-form-container">
+                <p>Crie sua conta para acessar</p>
+                <div class="login-form">
+                    <input type="email" id="regEmail" placeholder="E-mail" required>
+                    <input type="password" id="regPassword" placeholder="Senha" required>
+                    <input type="text" id="regNickname" placeholder="Nickname (ex: NitroZeus)" required>
+                    <select id="regBlock" required>
+                        <option value="" disabled selected>Selecione seu Bloco</option>
+                        <option value="SA">SA (América do Sul)</option>
+                        <option value="NA">NA (América do Norte)</option>
+                        <option value="EU">EU (Europa)</option>
+                        <option value="ASIA">ASIA</option>
+                        <option value="MENA">MENA</option>
+                    </select>
+                    <input type="text" id="regServer" placeholder="Servidor (ex: SA22)" required>
+                    <button class="btn btn-green" onclick="performRegister()">Cadastrar e Entrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="appContainer" style="display: none;">
+        <!-- Header -->
+        <header class="main-header">
+            <h1>Peak and Magic Square</h1>
+            <div class="header-right">
+                <div class="user-info" id="userInfo">
+                    <span class="boss-icon">👤</span> <span id="displayNickname">User</span> <span
+                        style="color:var(--text-muted)">|</span> <span id="displayServer"
+                        style="color:var(--text-secondary); font-size:0.9rem">SV</span>
+                    <button class="btn-logout" onclick="performLogout()" title="Sair / Logoff">🚪 Sair</button>
+                </div>
+                <div class="clock" id="mainClock">00:00:00</div>
+            </div>
+        </header>
+
+        <!-- Floor Navigation -->
+        <nav class="floor-nav">
+            <button class="floor-btn active" onclick="changeFloor(7)">PISO 7</button>
+            <button class="floor-btn" onclick="changeFloor(8)">PISO 8</button>
+            <button class="floor-btn" onclick="changeFloor(9)">PISO 9</button>
+            <button class="floor-btn" onclick="changeFloor(10)">PISO 10</button>
+        </nav>
+
+        <!-- Main Grid Layout -->
+        <div class="main-grid">
+
+            <!-- LEFT COLUMN -->
+            <div class="left-column">
+
+                <!-- Bosses Amarelos -->
+                <div class="panel panel-yellow">
+                    <div class="panel-header yellow-header">Bosses Amarelos <span class="cooldown-badge">1h</span></div>
+                    <div class="panel-body">
+                        <table class="timer-table">
+                            <thead>
+                                <tr>
+                                    <th>Qual Boss?</th>
+                                    <th>Esquerda</th>
+                                    <th>Direita</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="row-killed">
+                                    <td>Timer Morreu</td>
+                                    <td id="ama-esq-morreu">--:--:--</td>
+                                    <td id="ama-dir-morreu">--:--:--</td>
+                                </tr>
+                                <tr class="row-respawn">
+                                    <td>Timer Nasceu</td>
+                                    <td id="ama-esq-nasceu">--:--:--</td>
+                                    <td id="ama-dir-nasceu">--:--:--</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="btn-group">
+                            <button class="btn btn-yellow" id="btn-ama-esq" onclick="registerKill('ama-esq', 60)">
+                                <span class="boss-icon">👹</span> Ama Esq
+                            </button>
+                            <button class="btn btn-yellow" id="btn-ama-dir" onclick="registerKill('ama-dir', 60)">
+                                <span class="boss-icon">👹</span> Ama Dir
+                            </button>
+                            <button class="btn btn-yellow-all"
+                                onclick="registerKill('ama-esq', 60); registerKill('ama-dir', 60);">
+                                Todos Ama
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bosses Verdes -->
+                <div class="panel panel-green">
+                    <div class="panel-header green-header">Bosses Verdes <span class="cooldown-badge">30min</span></div>
+                    <div class="panel-body">
+                        <table class="timer-table">
+                            <thead>
+                                <tr>
+                                    <th>Qual Boss?</th>
+                                    <th>Norte</th>
+                                    <th>Esquerda</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="row-killed">
+                                    <td>Timer Morreu</td>
+                                    <td id="verde-norte-morreu">--:--:--</td>
+                                    <td id="verde-esq-morreu">--:--:--</td>
+                                </tr>
+                                <tr class="row-respawn">
+                                    <td>Timer Nasceu</td>
+                                    <td id="verde-norte-nasceu">--:--:--</td>
+                                    <td id="verde-esq-nasceu">--:--:--</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="btn-group">
+                            <button class="btn btn-green" onclick="registerKill('verde-norte', 30)">
+                                <span class="boss-icon">👺</span> Verde Norte
+                            </button>
+                            <button class="btn btn-green" onclick="registerKill('verde-esq', 30)">
+                                <span class="boss-icon">👺</span> Verde Esq
+                            </button>
+                        </div>
+
+                        <div class="sub-divider"></div>
+
+                        <table class="timer-table">
+                            <thead>
+                                <tr>
+                                    <th>Qual Boss?</th>
+                                    <th>Sul</th>
+                                    <th>Direita</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="row-killed">
+                                    <td>Timer Morreu</td>
+                                    <td id="verde-sul-morreu">--:--:--</td>
+                                    <td id="verde-dir-morreu">--:--:--</td>
+                                </tr>
+                                <tr class="row-respawn">
+                                    <td>Timer Nasceu</td>
+                                    <td id="verde-sul-nasceu">--:--:--</td>
+                                    <td id="verde-dir-nasceu">--:--:--</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="btn-group">
+                            <button class="btn btn-green" onclick="registerKill('verde-sul', 30)">
+                                <span class="boss-icon">👺</span> Verde Sul
+                            </button>
+                            <button class="btn btn-green" onclick="registerKill('verde-dir', 30)">
+                                <span class="boss-icon">👺</span> Verde Dir
+                            </button>
+                            <button class="btn btn-green-all"
+                                onclick="registerKill('verde-norte',30);registerKill('verde-esq',30);registerKill('verde-sul',30);registerKill('verde-dir',30);">
+                                Todos Verdes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER COLUMN - Map + Resources -->
+            <div class="center-column">
+                <!-- Map -->
+                <div class="map-container">
+                    <div class="map-image">
+                        <img src="/Users/deimon/.gemini/antigravity/brain/6a70828b-f4d5-498f-9a83-a9168fc2ba77/media__1778939123083.jpg"
+                            alt="Mapa Pico Secreto - Bosses e Recursos" class="map-img">
+                    </div>
+                </div>
+
+                <!-- Resources Row -->
+                <div class="resources-row">
+                    <div class="panel panel-resource">
+                        <div class="panel-header gold-resource-header">Minério Dourado <span
+                                class="cooldown-badge">1h</span></div>
+                        <div class="panel-body">
+                            <table class="timer-table compact">
+                                <tr class="row-killed">
+                                    <td>Timer Pegou</td>
+                                    <td id="minerio-morreu">--:--:--</td>
+                                </tr>
+                                <tr class="row-respawn">
+                                    <td>Timer Nasce</td>
+                                    <td id="minerio-nasceu">--:--:--</td>
+                                </tr>
+                            </table>
+                            <button class="btn btn-gold-resource" onclick="registerKill('minerio', 60)">
+                                ⛏️ Minério
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel panel-resource">
+                        <div class="panel-header gold-resource-header">Planta Dourada <span
+                                class="cooldown-badge">1h</span></div>
+                        <div class="panel-body">
+                            <table class="timer-table compact">
+                                <tr class="row-killed">
+                                    <td>Timer Pegou</td>
+                                    <td id="planta-morreu">--:--:--</td>
+                                </tr>
+                                <tr class="row-respawn">
+                                    <td>Timer Nasce</td>
+                                    <td id="planta-nasceu">--:--:--</td>
+                                </tr>
+                            </table>
+                            <button class="btn btn-gold-resource" onclick="registerKill('planta', 60)">
+                                🌿 Planta
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel panel-resource">
+                        <div class="panel-header gold-resource-header">Energia Dourada <span
+                                class="cooldown-badge">1h</span></div>
+                        <div class="panel-body">
+                            <table class="timer-table compact">
+                                <tr class="row-killed">
+                                    <td>Timer Pegou</td>
+                                    <td id="energia-morreu">--:--:--</td>
+                                </tr>
+                                <tr class="row-respawn">
+                                    <td>Timer Nasce</td>
+                                    <td id="energia-nasceu">--:--:--</td>
+                                </tr>
+                            </table>
+                            <button class="btn btn-gold-resource" onclick="registerKill('energia', 60)">
+                                ⚡ Energia
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN -->
+            <div class="right-column">
+
+                <!-- Bosses Praça -->
+                <div class="panel panel-purple">
+                    <div class="panel-header purple-header">Bosses Praça</div>
+                    <div class="panel-body">
+                        <table class="timer-table">
+                            <thead>
+                                <tr>
+                                    <th>Qual Boss?</th>
+                                    <th>Líder 2</th>
+                                    <th>Líder 1</th>
+                                    <th>Selar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="row-killed">
+                                    <td>Timer Morreu</td>
+                                    <td id="lider2-morreu">--:--:--</td>
+                                    <td id="lider1-morreu">--:--:--</td>
+                                    <td id="selar-morreu">--:--:--</td>
+                                </tr>
+                                <tr class="row-respawn">
+                                    <td>Timer Nasceu</td>
+                                    <td id="lider2-nasceu">--:--:--</td>
+                                    <td id="lider1-nasceu">--:--:--</td>
+                                    <td id="selar-nasceu">--:--:--</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="btn-group">
+                            <button class="btn btn-purple" onclick="registerKill('lider2', 60)">
+                                💀 Líder 2
+                            </button>
+                            <button class="btn btn-purple" onclick="registerKill('lider1', 30)">
+                                💀 Líder 1
+                            </button>
+                            <button class="btn btn-purple" onclick="registerKill('selar', 60)">
+                                ⚔️ Selar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reds e Liders 3 -->
+                <div class="panel panel-red-schedule">
+                    <div class="panel-header red-header">Reds e Liders 3 <span class="cooldown-badge">30min</span></div>
+                    <div class="panel-body">
+                        <table class="schedule-table">
+                            <thead>
+                                <tr>
+                                    <th>Horário</th>
+                                    <th>Piso</th>
+                                    <th>Praça</th>
+                                    <th>Horário</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="schedule-time">1H</td>
+                                    <td><input type="text" class="schedule-input" id="pico-1" placeholder="FREE"></td>
+                                    <td><input type="text" class="schedule-input" id="praca-1" placeholder="FREE"></td>
+                                    <td class="schedule-time">0H</td>
+                                </tr>
+                                <tr>
+                                    <td class="schedule-time">4H</td>
+                                    <td><input type="text" class="schedule-input" id="pico-4" placeholder="FREE"></td>
+                                    <td><input type="text" class="schedule-input" id="praca-4" placeholder="FREE"></td>
+                                    <td class="schedule-time">3H</td>
+                                </tr>
+                                <tr>
+                                    <td class="schedule-time">7H</td>
+                                    <td><input type="text" class="schedule-input" id="pico-7" placeholder="FREE"></td>
+                                    <td><input type="text" class="schedule-input" id="praca-7" placeholder="FREE"></td>
+                                    <td class="schedule-time">6H</td>
+                                </tr>
+                                <tr>
+                                    <td class="schedule-time">10H</td>
+                                    <td><input type="text" class="schedule-input" id="pico-10" placeholder="FREE"></td>
+                                    <td><input type="text" class="schedule-input" id="praca-10" placeholder="FREE"></td>
+                                    <td class="schedule-time">9H</td>
+                                </tr>
+                                <tr>
+                                    <td class="schedule-time">13H</td>
+                                    <td><input type="text" class="schedule-input" id="pico-13" placeholder="FREE"></td>
+                                    <td><input type="text" class="schedule-input" id="praca-13" placeholder="FREE"></td>
+                                    <td class="schedule-time">12H</td>
+                                </tr>
+                                <tr>
+                                    <td class="schedule-time">16H</td>
+                                    <td><input type="text" class="schedule-input" id="pico-16" placeholder="FREE"></td>
+                                    <td><input type="text" class="schedule-input" id="praca-16" placeholder="FREE"></td>
+                                    <td class="schedule-time">15H</td>
+                                </tr>
+                                <tr>
+                                    <td class="schedule-time">19H</td>
+                                    <td><input type="text" class="schedule-input" id="pico-19" placeholder="FREE"></td>
+                                    <td><input type="text" class="schedule-input" id="praca-19" placeholder="FREE"></td>
+                                    <td class="schedule-time">18H</td>
+                                </tr>
+                                <tr>
+                                    <td class="schedule-time">22H</td>
+                                    <td><input type="text" class="schedule-input" id="pico-22" placeholder="FREE"></td>
+                                    <td><input type="text" class="schedule-input" id="praca-22" placeholder="FREE"></td>
+                                    <td class="schedule-time">21H</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tempo Entre -->
+                <div class="panel panel-info">
+                    <div class="panel-header info-header">Tempo Entre Spawns</div>
+                    <div class="panel-body tempo-info">
+                        <div class="tempo-item">
+                            <span class="tempo-color yellow-dot"></span>
+                            <span>Amarelos: <strong>01:00:00</strong></span>
+                        </div>
+                        <div class="tempo-item">
+                            <span class="tempo-color green-dot"></span>
+                            <span>Verdes: <strong>00:30:00</strong></span>
+                        </div>
+                        <div class="tempo-item">
+                            <span class="tempo-color red-dot"></span>
+                            <span>Vermelhos: <strong>00:30:00</strong></span>
+                        </div>
+                        <div class="tempo-item">
+                            <span class="tempo-color gold-dot"></span>
+                            <span>Recursos: <strong>01:00:00</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer with active countdowns and Log -->
+        <footer class="main-footer">
+            <div class="footer-top">
+                <div class="active-timers" id="activeTimers">
+                    <!-- Populated by JS -->
+                </div>
+                <div class="footer-actions">
+                    <button class="btn btn-danger" onclick="clearAllTimers()">🗑️ Limpar Todos</button>
+                    <button class="btn btn-secondary" onclick="exportTimers()">📋 Exportar</button>
+                </div>
+            </div>
+
+            <div class="activity-log-container">
+                <div class="activity-log-header">
+                    <span>📜 Log de Atividades (Piso <span id="currentFloorLog">7</span>)</span>
+                    <button class="btn btn-small" onclick="clearLog()">Limpar</button>
+                </div>
+                <div class="activity-log" id="activityLog">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Audio notification -->
+    <audio id="alertSound" preload="auto">
+        <source
+            src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczHjqIxN/RgDwYMIG/4danVCETTZzI2bBjJxM7hcLf0oo+GT2Gv9/WplQgEk+dyNqwYicTPIXC39GIPRg9h7/g1qZTIBJPnsjasGInEzyFwt/SiT4ZPoe/4NamUyAST5/J2rFjJxQ8hcLf0ok+GT6Hv+DWplIgEk+gyduyZCgVPIbD4NWnVSATT6HK3LNmKhc/h8Xk2KxeLB1Up9Y"
+            type="audio/wav">
+    </audio>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
