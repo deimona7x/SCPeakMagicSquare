@@ -60,6 +60,8 @@
         <header class="main-header">
             <h1>Peak and Magic Square</h1>
             <div class="header-right">
+                <button id="themeToggleBtn" class="btn-theme" onclick="toggleTheme()"
+                    title="Alternar Tema Claro/Escuro">☀️</button>
                 <div class="user-info" id="userInfo">
                     <span class="boss-icon">👤</span> <span id="displayNickname">User</span> <span
                         style="color:var(--text-muted)">|</span> <span id="displayServer"
@@ -70,8 +72,16 @@
             </div>
         </header>
 
+        <!-- Main Navigation -->
+        <nav class="main-tab-nav">
+            <button class="main-tab-btn active" id="tabTimers" onclick="switchMainTab('timers')">Timers do Piso</button>
+            <button class="main-tab-btn" id="tabSchedule" onclick="switchMainTab('schedule')">Horários Fixos (SA)</button>
+            <button class="main-tab-btn" id="tabPresence" onclick="switchMainTab('presence')">Presença</button>
+            <button class="main-tab-btn" id="tabRanking" onclick="switchMainTab('ranking')">Relatório Semanal</button>
+        </nav>
+
         <!-- Floor Navigation -->
-        <nav class="floor-nav">
+        <nav class="floor-nav" id="floorNav">
             <button class="floor-btn active" onclick="changeFloor(7)">PISO 7</button>
             <button class="floor-btn" onclick="changeFloor(8)">PISO 8</button>
             <button class="floor-btn" onclick="changeFloor(9)">PISO 9</button>
@@ -79,7 +89,7 @@
         </nav>
 
         <!-- Main Grid Layout -->
-        <div class="main-grid">
+        <div class="main-grid" id="mainGrid">
 
             <!-- LEFT COLUMN -->
             <div class="left-column">
@@ -202,8 +212,7 @@
                 <!-- Map -->
                 <div class="map-container">
                     <div class="map-image">
-                        <img src="map_8f.png"
-                            alt="Mapa Pico Secreto - Bosses e Recursos" class="map-img">
+                        <img src="map_8f.png" alt="Mapa Pico Secreto - Bosses e Recursos" class="map-img">
                     </div>
                 </div>
 
@@ -395,13 +404,172 @@
                         </div>
                         <div class="tempo-item">
                             <span class="tempo-color red-dot"></span>
-                            <span>Vermelhos: <strong>00:30:00</strong></span>
+                            <span>Vermelhos: <strong>06:00:00</strong></span>
                         </div>
                         <div class="tempo-item">
                             <span class="tempo-color gold-dot"></span>
                             <span>Recursos: <strong>01:00:00</strong></span>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedule Fixed Times Container -->
+        <div class="schedule-container" id="scheduleContainer" style="display: none;">
+            <div class="schedule-grid-layout">
+                <!-- Col 1 -->
+                <div class="schedule-col">
+                    <div class="panel panel-yellow">
+                        <div class="panel-header yellow-header">World Boss</div>
+                        <div class="panel-body">
+                            <table class="timer-table fixed-schedule">
+                                <tr><td>Segunda 23:00</td><td>Krukan</td></tr>
+                                <tr><td>Terça 23:00</td><td>Nerkan</td></tr>
+                                <tr><td>Quarta 23:00</td><td>Hellbar</td></tr>
+                                <tr><td>Quinta 23:00</td><td>Turkan</td></tr>
+                                <tr><td>Sexta 23:00</td><td>Utukan</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="panel panel-info">
+                        <div class="panel-header info-header">Eventos Diários</div>
+                        <div class="panel-body">
+                            <table class="timer-table fixed-schedule">
+                                <tr><td>Labirinto</td><td>10:00 | 20:00</td></tr>
+                                <tr><td>Vale</td><td>12:00 | 22:00</td></tr>
+                                <tr><td>Touro</td><td>22:00</td></tr>
+                                <tr><td>Velho</td><td>00:00</td></tr>
+                                <tr><td>5F Hydra</td><td>00:00</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Col 2 -->
+                <div class="schedule-col">
+                    <div class="panel panel-purple">
+                        <div class="panel-header purple-header">Praça Mágica - Líder 3</div>
+                        <div class="panel-body">
+                            <table class="timer-table fixed-schedule">
+                                <tr><td>Madrugada</td><td>00:00 | 03:00</td></tr>
+                                <tr><td>Manhã</td><td>06:00 | 09:00</td></tr>
+                                <tr><td>Tarde</td><td>12:00 | 15:00 | 18:00</td></tr>
+                                <tr><td>Noite</td><td>21:00</td></tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="panel panel-red-schedule">
+                        <div class="panel-header red-header">Pico Secreto - Boss Red</div>
+                        <div class="panel-body">
+                            <table class="timer-table fixed-schedule">
+                                <tr><td style="color:var(--red-primary)">SUL</td><td>01:00 | 07:00 | 13:00 | 19:00</td></tr>
+                                <tr><td style="color:var(--red-primary)">NORTE</td><td>04:00 | 10:00 | 16:00 | 22:00</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="panel panel-green">
+                        <div class="panel-header green-header">Dominação - Torre</div>
+                        <div class="panel-body">
+                            <table class="timer-table fixed-schedule compact">
+                                <tr><th>Horário</th><th>Juja</th><th>Evento</th></tr>
+                                <tr><td>09:00 - 13:00</td><td>11:00</td><td>10:00 / 12:00</td></tr>
+                                <tr><td>15:00 - 19:00</td><td>17:00</td><td>16:00 / 18:00</td></tr>
+                                <tr><td>21:00 - 01:00</td><td>23:00</td><td>22:00 / 00:00</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Col 3 -->
+                <div class="schedule-col">
+                    <div class="panel panel-info">
+                        <div class="panel-header info-header">Praça 11 - MS 11</div>
+                        <div class="panel-body">
+                            <table class="timer-table fixed-schedule">
+                                <tr><td>Fury</td><td>05:00 | 11:00 | 17:00 | 23:00</td></tr>
+                                <tr><td>Frenzy</td><td>08:00 | 14:00 | 20:00 | 02:00</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="panel panel-yellow">
+                        <div class="panel-header yellow-header">Pico 11 - SP 11</div>
+                        <div class="panel-body">
+                            <table class="timer-table fixed-schedule">
+                                <tr><td>Boss Sul</td><td>07:00 | 19:00</td></tr>
+                                <tr><td>Boss Norte</td><td>13:00 | 01:00</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="panel panel-gold-resource">
+                        <div class="panel-header gold-resource-header">Purgatório</div>
+                        <div class="panel-body">
+                            <table class="timer-table fixed-schedule">
+                                <tr><td>1º Horário</td><td>06:00</td></tr>
+                                <tr><td>2º Horário</td><td>12:00</td></tr>
+                                <tr><td>3º Horário</td><td>18:00</td></tr>
+                                <tr><td>4º Horário</td><td>00:00</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Presence Container -->
+        <div class="presence-container" id="presenceContainer" style="display: none; padding: 20px 24px; max-width: 600px; margin: 0 auto; width: 100%;">
+            <div class="panel panel-info">
+                <div class="panel-header info-header">Registrar Presença (5 Pontos)</div>
+                <div class="panel-body">
+                    <div class="presence-form" style="display:flex; flex-direction:column; gap:15px;">
+                        <label for="presenceEvent" style="font-weight:600; color:var(--text-secondary);">O que foi lutado? / What was fought for?</label>
+                        <select id="presenceEvent" class="schedule-input" style="padding:10px;">
+                            <option value="">Selecione...</option>
+                            <option value="BOSS RED PICO / BOSS RED SP">BOSS RED PICO / BOSS RED SP</option>
+                            <option value="LÍDER 3 PRAÇA / LEADER 3 MS">LÍDER 3 PRAÇA / LEADER 3 MS</option>
+                            <option value="WORLDBOSS">WORLDBOSS</option>
+                            <option value="EVENTOS GLOBAIS / GLOBAL EVENTS">EVENTOS GLOBAIS / GLOBAL EVENTS (Lab, Vale, Touro...)</option>
+                            <option value="TORRE">TORRE</option>
+                            <option value="PURGATÓRIO / PURGATORY">PURGATÓRIO / PURGATORY</option>
+                        </select>
+
+                        <label style="font-weight:600; color:var(--text-secondary);">Comprovação (Print)</label>
+                        <div id="dropZone" class="drop-zone schedule-input" style="padding: 30px; text-align: center; border: 2px dashed var(--border-default); cursor: pointer;">
+                            <span id="dropZoneText">Arraste a imagem, cole (Ctrl+V) ou clique para selecionar</span>
+                            <input type="file" id="presenceImage" accept="image/*" style="display:none;">
+                            <img id="imagePreview" src="" alt="Preview" style="display:none; max-width:100%; max-height:200px; margin-top:10px; border-radius:8px;">
+                        </div>
+
+                        <button id="btnSubmitPresence" class="btn-theme" style="margin-top: 10px; width: 100%; padding: 12px; font-weight:700;" onclick="submitPresence()">ENVIAR PRESENÇA</button>
+                        <div id="presenceMessage" style="text-align:center; font-weight:bold;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ranking Container -->
+        <div class="ranking-container" id="rankingContainer" style="display: none; padding: 20px 24px; max-width: 800px; margin: 0 auto; width: 100%;">
+            <div class="panel panel-gold-resource">
+                <div class="panel-header gold-resource-header">Relatório Semanal de Liderança</div>
+                <div class="panel-body">
+                    <p style="text-align:center; color:var(--text-secondary); margin-bottom:15px;">A pontuação é resetada todo domingo às 23:59. Cada presença vale 5 pontos.</p>
+                    <table class="timer-table" id="rankingTable">
+                        <thead>
+                            <tr>
+                                <th>Posição</th>
+                                <th>Jogador</th>
+                                <th>Pontos</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankingBody">
+                            <!-- Ranking dynamically inserted here -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

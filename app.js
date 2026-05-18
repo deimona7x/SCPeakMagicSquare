@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, orderBy, limit, addDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, orderBy, limit, addDoc, writeBatch, getDocs, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-storage.js";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -16,6 +17,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 // State
 let currentUser = null; 
@@ -57,6 +59,14 @@ document.addEventListener('DOMContentLoaded', () => {
         input.addEventListener('change', saveSchedule);
         input.addEventListener('blur', saveSchedule);
     });
+
+    // Theme initialization
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    if (savedTheme === 'light') {
+        document.body.classList.add('theme-light');
+        const themeBtn = document.getElementById('themeToggleBtn');
+        if (themeBtn) themeBtn.textContent = '🌙';
+    }
 });
 
 // AUTH STATE LISTENER
@@ -161,6 +171,19 @@ function listenToServerData() {
 // ============================================
 // GLOBAL EXPORTS (For HTML onclick events)
 // ============================================
+window.toggleTheme = function() {
+    const isLight = document.body.classList.toggle('theme-light');
+    const themeBtn = document.getElementById('themeToggleBtn');
+    
+    if (isLight) {
+        localStorage.setItem('theme', 'light');
+        if (themeBtn) themeBtn.textContent = '🌙';
+    } else {
+        localStorage.setItem('theme', 'dark');
+        if (themeBtn) themeBtn.textContent = '☀️';
+    }
+};
+
 window.switchAuthTab = function(tabName) {
     document.querySelectorAll('.auth-tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.auth-form-container').forEach(form => form.classList.remove('active'));
@@ -232,6 +255,35 @@ window.performLogout = async function() {
         window.switchAuthTab('login');
     } catch (error) {
         console.error(error);
+    }
+};
+
+window.switchMainTab = function(tabName) {
+    document.getElementById('tabTimers').classList.remove('active');
+    document.getElementById('tabSchedule').classList.remove('active');
+    document.getElementById('tabPresence').classList.remove('active');
+    document.getElementById('tabRanking').classList.remove('active');
+    
+    document.getElementById('floorNav').style.display = 'none';
+    document.getElementById('mainGrid').style.display = 'none';
+    document.getElementById('scheduleContainer').style.display = 'none';
+    document.getElementById('presenceContainer').style.display = 'none';
+    document.getElementById('rankingContainer').style.display = 'none';
+
+    if (tabName === 'timers') {
+        document.getElementById('tabTimers').classList.add('active');
+        document.getElementById('floorNav').style.display = 'flex';
+        document.getElementById('mainGrid').style.display = 'grid';
+    } else if (tabName === 'schedule') {
+        document.getElementById('tabSchedule').classList.add('active');
+        document.getElementById('scheduleContainer').style.display = 'block';
+    } else if (tabName === 'presence') {
+        document.getElementById('tabPresence').classList.add('active');
+        document.getElementById('presenceContainer').style.display = 'block';
+    } else if (tabName === 'ranking') {
+        document.getElementById('tabRanking').classList.add('active');
+        document.getElementById('rankingContainer').style.display = 'block';
+        window.loadWeeklyRanking();
     }
 };
 
@@ -586,3 +638,217 @@ document.addEventListener('click', () => {
         Notification.requestPermission();
     }
 }, { once: true });
+
+// ============================================
+// PRESENCE & RANKING LOGIC
+// ============================================
+
+let currentFile = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('presenceImage');
+    const preview = document.getElementById('imagePreview');
+    const dropZoneText = document.getElementById('dropZoneText');
+
+    if (!dropZone) return;
+
+    // Click to select
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // File selected via input
+    fileInput.addEventListener('change', function(e) {
+        handleFile(this.files[0]);
+    });
+
+    // Drag and Drop
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--purple-primary)';
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border-default)';
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border-default)';
+        if (e.dataTransfer.files.length) {
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    // Paste
+    document.addEventListener('paste', (e) => {
+        // Only handle paste if we are on the presence tab
+        if(document.getElementById('presenceContainer').style.display === 'block') {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let item of items) {
+                if (item.type.indexOf('image') === 0) {
+                    handleFile(item.getAsFile());
+                    break;
+                }
+            }
+        }
+    });
+
+    function handleFile(file) {
+        if (!file || !file.type.startsWith('image/')) {
+            alert('Por favor, selecione uma imagem válida.');
+            return;
+        }
+        currentFile = file;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            dropZoneText.style.display = 'none';
+        }
+        reader.readAsDataURL(file);
+    }
+});
+
+// Helper: Get ISO Week Number
+function getISOWeekNumber(d) {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+    var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    var weekNo = Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
+    return d.getUTCFullYear() + "-W" + String(weekNo).padStart(2, '0');
+}
+
+window.submitPresence = async function() {
+    if (!currentUser) {
+        alert("Você precisa estar logado!");
+        return;
+    }
+    
+    const eventType = document.getElementById('presenceEvent').value;
+    if (!eventType) {
+        alert("Por favor, selecione qual evento foi lutado.");
+        return;
+    }
+
+    if (!currentFile) {
+        alert("Por favor, anexe a comprovação (Print).");
+        return;
+    }
+
+    // Validação de 15 minutos (Como todos os eventos do jogo acontecem em horas fechadas :00)
+    // O jogador só pode enviar a print entre 00 e 15 minutos de qualquer hora.
+    const now = new Date();
+    const currentMinutes = now.getMinutes();
+    
+    if (currentMinutes > 15) {
+        alert("Fora do horário permitido! Você só pode enviar prints até 15 minutos após o início de um evento.");
+        return;
+    }
+
+    const msg = document.getElementById('presenceMessage');
+    msg.textContent = 'Enviando... Por favor, aguarde.';
+    msg.style.color = 'var(--text-primary)';
+    document.getElementById('btnSubmitPresence').disabled = true;
+
+    try {
+        const serverToUse = currentServerView || currentUser.server;
+        const weekStr = getISOWeekNumber(now);
+        
+        // Upload para Storage
+        const fileRef = ref(storage, `attendance/${serverToUse}/${weekStr}/${currentUser.uid}_${Date.now()}.jpg`);
+        const uploadResult = await uploadBytes(fileRef, currentFile);
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+
+        // Salvar no Firestore
+        await addDoc(collection(db, `servers/${serverToUse}/attendance`), {
+            uid: currentUser.uid,
+            nickname: currentUser.nickname,
+            event: eventType,
+            imageUrl: downloadURL,
+            timestamp: now.getTime(),
+            weekNumber: weekStr,
+            points: 5
+        });
+
+        msg.textContent = 'Presença registrada com sucesso! +5 Pontos!';
+        msg.style.color = 'var(--green-primary)';
+        
+        // Reset form
+        currentFile = null;
+        document.getElementById('presenceEvent').value = '';
+        document.getElementById('imagePreview').style.display = 'none';
+        document.getElementById('dropZoneText').style.display = 'block';
+
+        setTimeout(() => { msg.textContent = ''; }, 5000);
+    } catch (error) {
+        console.error("Erro ao enviar presença:", error);
+        msg.textContent = 'Erro ao enviar. Tente novamente.';
+        msg.style.color = 'var(--red-primary)';
+    } finally {
+        document.getElementById('btnSubmitPresence').disabled = false;
+    }
+};
+
+window.loadWeeklyRanking = async function() {
+    if (!currentUser) return;
+    
+    const tbody = document.getElementById('rankingBody');
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando ranking...</td></tr>';
+    
+    const serverToUse = currentServerView || currentUser.server;
+    const weekStr = getISOWeekNumber(new Date());
+
+    try {
+        const q = query(
+            collection(db, `servers/${serverToUse}/attendance`),
+            where("weekNumber", "==", weekStr)
+        );
+        
+        const snapshot = await getDocs(q);
+        const pointsMap = {};
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (!pointsMap[data.nickname]) {
+                pointsMap[data.nickname] = 0;
+            }
+            pointsMap[data.nickname] += data.points || 5;
+        });
+
+        // Convert to array and sort
+        const ranking = Object.keys(pointsMap).map(nick => ({
+            nickname: nick,
+            points: pointsMap[nick]
+        })).sort((a, b) => b.points - a.points);
+
+        tbody.innerHTML = '';
+        if (ranking.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">Nenhuma presença registrada nesta semana ainda.</td></tr>';
+            return;
+        }
+
+        ranking.forEach((player, index) => {
+            const tr = document.createElement('tr');
+            let positionColor = 'inherit';
+            let positionText = index + 1;
+            
+            if (index === 0) { positionColor = '#fbbf24'; positionText = '🥇 1º'; }
+            else if (index === 1) { positionColor = '#94a3b8'; positionText = '🥈 2º'; }
+            else if (index === 2) { positionColor = '#b45309'; positionText = '🥉 3º'; }
+            
+            tr.innerHTML = `
+                <td style="color:${positionColor}; font-weight:bold;">${positionText}</td>
+                <td>${player.nickname}</td>
+                <td style="color:var(--green-primary); font-weight:bold;">${player.points} pts</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+    } catch (error) {
+        console.error("Erro ao carregar ranking:", error);
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--red-primary);">Erro ao carregar ranking.</td></tr>';
+    }
+};
+
