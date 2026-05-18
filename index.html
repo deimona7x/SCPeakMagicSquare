@@ -12,7 +12,6 @@
 </head>
 
 <body>
-    <!-- Login/Register Modal -->
     <div id="loginModal" class="login-modal">
         <div class="login-content">
             <h2>BEM-VINDO</h2>
@@ -23,7 +22,6 @@
                 <button class="auth-tab" onclick="switchAuthTab('register')">Registre-se</button>
             </div>
 
-            <!-- Login Form -->
             <div id="formLogin" class="auth-form-container active">
                 <p>Identifique-se para acessar o painel</p>
                 <div class="login-form">
@@ -33,7 +31,6 @@
                 </div>
             </div>
 
-            <!-- Register Form -->
             <div id="formRegister" class="auth-form-container">
                 <p>Crie sua conta para acessar</p>
                 <div class="login-form">
@@ -56,7 +53,6 @@
     </div>
 
     <div class="app-container" id="appContainer" style="display: none;">
-        <!-- Header -->
         <header class="main-header">
             <h1>Peak and Magic Square</h1>
             <div class="header-right">
@@ -72,7 +68,6 @@
             </div>
         </header>
 
-        <!-- Main Navigation -->
         <nav class="main-tab-nav">
             <button class="main-tab-btn active" id="tabTimers" onclick="switchMainTab('timers')">Timers do Piso</button>
             <button class="main-tab-btn" id="tabSchedule" onclick="switchMainTab('schedule')">Horários Fixos (SA)</button>
@@ -80,7 +75,6 @@
             <button class="main-tab-btn" id="tabRanking" onclick="switchMainTab('ranking')">Relatório Semanal</button>
         </nav>
 
-        <!-- Floor Navigation -->
         <nav class="floor-nav" id="floorNav">
             <button class="floor-btn active" onclick="changeFloor(7)">PISO 7</button>
             <button class="floor-btn" onclick="changeFloor(8)">PISO 8</button>
@@ -88,13 +82,19 @@
             <button class="floor-btn" onclick="changeFloor(10)">PISO 10</button>
         </nav>
 
-        <!-- Main Grid Layout -->
+        <div class="active-timers-bar" id="activeTimersBar">
+            <div class="active-timers" id="activeTimers">
+                </div>
+            <div class="timer-actions">
+                <button class="btn btn-danger" onclick="clearAllTimers()">🗑️ Limpar Todos</button>
+                <button class="btn btn-secondary" onclick="exportTimers()">📋 Exportar</button>
+            </div>
+        </div>
+
         <div class="main-grid" id="mainGrid">
 
-            <!-- LEFT COLUMN -->
             <div class="left-column">
 
-                <!-- Bosses Amarelos -->
                 <div class="panel panel-yellow">
                     <div class="panel-header yellow-header">Bosses Amarelos <span class="cooldown-badge">1h</span></div>
                     <div class="panel-body">
@@ -134,7 +134,6 @@
                     </div>
                 </div>
 
-                <!-- Bosses Verdes -->
                 <div class="panel panel-green">
                     <div class="panel-header green-header">Bosses Verdes <span class="cooldown-badge">30min</span></div>
                     <div class="panel-body">
@@ -207,16 +206,13 @@
                 </div>
             </div>
 
-            <!-- CENTER COLUMN - Map + Resources -->
             <div class="center-column">
-                <!-- Map -->
                 <div class="map-container">
                     <div class="map-image">
                         <img src="map_8f.png" alt="Mapa Pico Secreto - Bosses e Recursos" class="map-img">
                     </div>
                 </div>
 
-                <!-- Resources Row -->
                 <div class="resources-row">
                     <div class="panel panel-resource">
                         <div class="panel-header gold-resource-header">Minério Dourado <span
@@ -278,10 +274,8 @@
                 </div>
             </div>
 
-            <!-- RIGHT COLUMN -->
             <div class="right-column">
 
-                <!-- Bosses Praça -->
                 <div class="panel panel-purple">
                     <div class="panel-header purple-header">Bosses Praça</div>
                     <div class="panel-body">
@@ -323,7 +317,6 @@
                     </div>
                 </div>
 
-                <!-- Reds e Liders 3 -->
                 <div class="panel panel-red-schedule">
                     <div class="panel-header red-header">Reds e Liders 3 <span class="cooldown-badge">30min</span></div>
                     <div class="panel-body">
@@ -390,7 +383,6 @@
                     </div>
                 </div>
 
-                <!-- Tempo Entre -->
                 <div class="panel panel-info">
                     <div class="panel-header info-header">Tempo Entre Spawns</div>
                     <div class="panel-body tempo-info">
@@ -415,10 +407,8 @@
             </div>
         </div>
 
-        <!-- Schedule Fixed Times Container -->
         <div class="schedule-container" id="scheduleContainer" style="display: none;">
             <div class="schedule-grid-layout">
-                <!-- Col 1 -->
                 <div class="schedule-col">
                     <div class="panel panel-yellow">
                         <div class="panel-header yellow-header">World Boss</div>
@@ -447,7 +437,6 @@
                     </div>
                 </div>
 
-                <!-- Col 2 -->
                 <div class="schedule-col">
                     <div class="panel panel-purple">
                         <div class="panel-header purple-header">Praça Mágica - Líder 3</div>
@@ -484,7 +473,6 @@
                     </div>
                 </div>
 
-                <!-- Col 3 -->
                 <div class="schedule-col">
                     <div class="panel panel-info">
                         <div class="panel-header info-header">Praça 11 - MS 11</div>
@@ -521,7 +509,6 @@
             </div>
         </div>
 
-        <!-- Presence Container -->
         <div class="presence-container" id="presenceContainer" style="display: none; padding: 20px 24px; max-width: 600px; margin: 0 auto; width: 100%;">
             <div class="panel panel-info">
                 <div class="panel-header info-header">Registrar Presença (5 Pontos)</div>
@@ -539,10 +526,11 @@
                         </select>
 
                         <label style="font-weight:600; color:var(--text-secondary);">Comprovação (Print)</label>
-                        <div id="dropZone" class="drop-zone schedule-input" style="padding: 30px; text-align: center; border: 2px dashed var(--border-default); cursor: pointer;">
+                        <div id="dropZone" class="drop-zone schedule-input" style="padding: 30px; text-align: center; border: 2px dashed var(--border-default); cursor: pointer; position: relative;">
                             <span id="dropZoneText">Arraste a imagem, cole (Ctrl+V) ou clique para selecionar</span>
                             <input type="file" id="presenceImage" accept="image/*" style="display:none;">
-                            <img id="imagePreview" src="" alt="Preview" style="display:none; max-width:100%; max-height:200px; margin-top:10px; border-radius:8px;">
+                            <img id="imagePreview" src="" alt="Preview" style="display:none; max-width:100%; max-height:200px; margin-top:10px; border-radius:8px; margin-left:auto; margin-right:auto;">
+                            <button id="btnRemoveImage" class="btn-danger btn-small" style="display:none; position: absolute; top: 10px; right: 10px; border-radius: 50%; width: 30px; height: 30px; padding: 0; font-weight: bold;">X</button>
                         </div>
 
                         <button id="btnSubmitPresence" class="btn-theme" style="margin-top: 10px; width: 100%; padding: 12px; font-weight:700;" onclick="submitPresence()">ENVIAR PRESENÇA</button>
@@ -552,7 +540,6 @@
             </div>
         </div>
 
-        <!-- Ranking Container -->
         <div class="ranking-container" id="rankingContainer" style="display: none; padding: 20px 24px; max-width: 800px; margin: 0 auto; width: 100%;">
             <div class="panel panel-gold-resource">
                 <div class="panel-header gold-resource-header">Relatório Semanal de Liderança</div>
@@ -567,38 +554,24 @@
                             </tr>
                         </thead>
                         <tbody id="rankingBody">
-                            <!-- Ranking dynamically inserted here -->
-                        </tbody>
+                            </tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- Footer with active countdowns and Log -->
         <footer class="main-footer">
-            <div class="footer-top">
-                <div class="active-timers" id="activeTimers">
-                    <!-- Populated by JS -->
-                </div>
-                <div class="footer-actions">
-                    <button class="btn btn-danger" onclick="clearAllTimers()">🗑️ Limpar Todos</button>
-                    <button class="btn btn-secondary" onclick="exportTimers()">📋 Exportar</button>
-                </div>
-            </div>
-
             <div class="activity-log-container">
                 <div class="activity-log-header">
                     <span>📜 Log de Atividades (Piso <span id="currentFloorLog">7</span>)</span>
                     <button class="btn btn-small" onclick="clearLog()">Limpar</button>
                 </div>
                 <div class="activity-log" id="activityLog">
-                    <!-- Populated by JS -->
-                </div>
+                    </div>
             </div>
         </footer>
     </div>
 
-    <!-- Audio notification -->
     <audio id="alertSound" preload="auto">
         <source
             src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczHjqIxN/RgDwYMIG/4danVCETTZzI2bBjJxM7hcLf0oo+GT2Gv9/WplQgEk+dyNqwYicTPIXC39GIPRg9h7/g1qZTIBJPnsjasGInEzyFwt/SiT4ZPoe/4NamUyAST5/J2rFjJxQ8hcLf0ok+GT6Hv+DWplIgEk+gyduyZCgVPIbD4NWnVSATT6HK3LNmKhc/h8Xk2KxeLB1Up9Y"
