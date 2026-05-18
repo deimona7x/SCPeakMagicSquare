@@ -265,6 +265,7 @@ window.switchMainTab = function(tabName) {
     document.getElementById('tabRanking').classList.remove('active');
     
     document.getElementById('floorNav').style.display = 'none';
+    document.getElementById('activeTimersBar').style.display = 'none'; 
     document.getElementById('mainGrid').style.display = 'none';
     document.getElementById('scheduleContainer').style.display = 'none';
     document.getElementById('presenceContainer').style.display = 'none';
@@ -273,6 +274,7 @@ window.switchMainTab = function(tabName) {
     if (tabName === 'timers') {
         document.getElementById('tabTimers').classList.add('active');
         document.getElementById('floorNav').style.display = 'flex';
+        document.getElementById('activeTimersBar').style.display = 'flex'; 
         document.getElementById('mainGrid').style.display = 'grid';
     } else if (tabName === 'schedule') {
         document.getElementById('tabSchedule').classList.add('active');
@@ -423,7 +425,7 @@ async function logActivity(action, target) {
     const logEntry = {
         time: formatTime(now),
         user: currentUser.nickname,
-        server: currentUser.server, // Origin server of the user
+        server: currentUser.server, 
         action: action,
         target: target,
         floor: currentFloor,
@@ -518,7 +520,7 @@ function updateActiveTimers() {
                     nasceuEl.closest('tr')?.classList.add('timer-soon');
                     nasceuEl.closest('tr')?.classList.remove('timer-ready');
                 } else {
-                    nasceuEl.closest('tr')?.classList.remove('timer-soon');
+                    nasnestedEl.closest('tr')?.classList.remove('timer-soon');
                     nasceuEl.closest('tr')?.classList.remove('timer-ready');
                 }
             }
@@ -550,7 +552,6 @@ async function checkAlerts() {
     const now = Date.now();
     let updated = false;
     
-    // Use local timersData because it's in sync with Firebase
     for (const [floor, floorTimers] of Object.entries(timersData)) {
         for (const [id, timer] of Object.entries(floorTimers)) {
             if (timer.notified) continue;
@@ -650,11 +651,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('presenceImage');
     const preview = document.getElementById('imagePreview');
     const dropZoneText = document.getElementById('dropZoneText');
+    const btnRemoveImage = document.getElementById('btnRemoveImage');
 
     if (!dropZone) return;
 
     // Click to select
-    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('click', () => {
+        if(!currentFile) fileInput.click();
+    });
 
     // File selected via input
     fileInput.addEventListener('change', function(e) {
@@ -682,7 +686,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Paste
     document.addEventListener('paste', (e) => {
-        // Only handle paste if we are on the presence tab
         if(document.getElementById('presenceContainer').style.display === 'block') {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             for (let item of items) {
@@ -693,6 +696,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // Handle Remove Button click (UX Improvement & Bug Fix)
+    if (btnRemoveImage) {
+        btnRemoveImage.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+            currentFile = null;
+            fileInput.value = ''; 
+            preview.src = '';
+            preview.style.display = 'none';
+            btnRemoveImage.style.display = 'none';
+            dropZoneText.style.display = 'block';
+        });
+    }
 
     function handleFile(file) {
         if (!file || !file.type.startsWith('image/')) {
@@ -706,12 +722,12 @@ document.addEventListener('DOMContentLoaded', () => {
             preview.src = e.target.result;
             preview.style.display = 'block';
             dropZoneText.style.display = 'none';
+            if (btnRemoveImage) btnRemoveImage.style.display = 'block';
         }
         reader.readAsDataURL(file);
     }
 });
 
-// Helper: Get ISO Week Number
 function getISOWeekNumber(d) {
     d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
@@ -737,8 +753,6 @@ window.submitPresence = async function() {
         return;
     }
 
-    // Validação de 15 minutos (Como todos os eventos do jogo acontecem em horas fechadas :00)
-    // O jogador só pode enviar a print entre 00 e 15 minutos de qualquer hora.
     const now = new Date();
     const currentMinutes = now.getMinutes();
     
@@ -756,12 +770,10 @@ window.submitPresence = async function() {
         const serverToUse = currentServerView || currentUser.server;
         const weekStr = getISOWeekNumber(now);
         
-        // Upload para Storage
         const fileRef = ref(storage, `attendance/${serverToUse}/${weekStr}/${currentUser.uid}_${Date.now()}.jpg`);
         const uploadResult = await uploadBytes(fileRef, currentFile);
         const downloadURL = await getDownloadURL(uploadResult.ref);
 
-        // Salvar no Firestore
         await addDoc(collection(db, `servers/${serverToUse}/attendance`), {
             uid: currentUser.uid,
             nickname: currentUser.nickname,
@@ -775,11 +787,14 @@ window.submitPresence = async function() {
         msg.textContent = 'Presença registrada com sucesso! +5 Pontos!';
         msg.style.color = 'var(--green-primary)';
         
-        // Reset form
+        // Reset form (Inclui limpeza do Input File)
         currentFile = null;
         document.getElementById('presenceEvent').value = '';
+        document.getElementById('presenceImage').value = ''; 
         document.getElementById('imagePreview').style.display = 'none';
         document.getElementById('dropZoneText').style.display = 'block';
+        const btnRemove = document.getElementById('btnRemoveImage');
+        if (btnRemove) btnRemove.style.display = 'none';
 
         setTimeout(() => { msg.textContent = ''; }, 5000);
     } catch (error) {
@@ -817,7 +832,6 @@ window.loadWeeklyRanking = async function() {
             pointsMap[data.nickname] += data.points || 5;
         });
 
-        // Convert to array and sort
         const ranking = Object.keys(pointsMap).map(nick => ({
             nickname: nick,
             points: pointsMap[nick]
@@ -851,4 +865,3 @@ window.loadWeeklyRanking = async function() {
         tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--red-primary);">Erro ao carregar ranking.</td></tr>';
     }
 };
-
