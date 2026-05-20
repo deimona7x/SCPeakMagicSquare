@@ -217,7 +217,7 @@ onAuthStateChanged(auth, async (user) => {
                 email: user.email,
                 nickname: data.nickname,
                 block: data.block,
-                server: normalizeServerName(data.server),
+                server: normalizeServerAlias(data.server),
                 role: data.role || 'user',
                 status,
                 isMaster
@@ -289,7 +289,7 @@ async function loadStaffServerOptions() {
     try {
         const snapshot = await getDocs(collection(db, "users"));
         snapshot.forEach(userDoc => {
-            const server = normalizeServerName(userDoc.data().server);
+            const server = normalizeServerAlias(userDoc.data().server);
             if (server) servers.add(server);
         });
     } catch (error) {
@@ -298,7 +298,7 @@ async function loadStaffServerOptions() {
 
     const groupedServers = groupServersByBlock(Array.from(servers));
     window.staffServersByBlock = groupedServers;
-    const selectedServer = normalizeServerName(currentServerView) || normalizeServerName(currentUser.server);
+    const selectedServer = normalizeServerAlias(currentServerView) || normalizeServerAlias(currentUser.server);
     const selectedBlock = inferBlockFromServer(selectedServer) || Object.keys(groupedServers)[0] || currentUser.block;
 
     blockSelect.innerHTML = '';
@@ -345,7 +345,7 @@ window.changeStaffBlock = function (block) {
 
 window.changeStaffServer = function (server) {
     if (!currentUser?.isMaster) return;
-    const normalizedServer = normalizeServerName(server);
+    const normalizedServer = normalizeServerAlias(server);
     if (!isValidServerName(normalizedServer)) {
         alert('Servidor inválido. Exemplo: SA22.');
         const select = document.getElementById('staffServerSelect');
@@ -478,7 +478,7 @@ window.performRegister = async function () {
     const password = document.getElementById('regPassword').value.trim();
     const nickname = document.getElementById('regNickname').value.trim();
     const block = document.getElementById('regBlock').value;
-    const server = normalizeServerName(document.getElementById('regServer').value);
+    const server = normalizeServerAlias(document.getElementById('regServer').value);
 
     if (!email || !password || !nickname || !block || !server) { alert('Por favor, preencha todos os campos.'); return; }
     if (!isValidServerName(server)) {
@@ -762,6 +762,26 @@ function normalizeStatus(status) {
 
 function normalizeServerName(server) {
     return String(server || '').trim().toUpperCase();
+}
+
+function normalizeServerAlias(server) {
+    const normalizedServer = normalizeServerName(server);
+    if (isValidServerName(normalizedServer)) return normalizedServer;
+
+    const legacyMatch = normalizedServer.match(/^(SA|NA|EU|ASIA)(\d+)$/);
+    if (legacyMatch) {
+        const [, block, number] = legacyMatch;
+        const paddedServer = `${block}${number.padStart(3, '0')}`;
+        if (isValidServerName(paddedServer)) return paddedServer;
+    }
+
+    const legacyInmenaMatch = normalizedServer.match(/^INMENA(\d+)$/);
+    if (legacyInmenaMatch) {
+        const paddedServer = `INMENA${legacyInmenaMatch[1].padStart(3, '0')}`;
+        if (isValidServerName(paddedServer)) return paddedServer;
+    }
+
+    return normalizedServer;
 }
 
 function isValidServerName(server) {
