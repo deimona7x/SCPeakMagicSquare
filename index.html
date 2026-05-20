@@ -15,7 +15,8 @@
     <div id="loginModal" class="login-modal">
         <div class="login-content">
             <h2>BEM-VINDO</h2>
-            <p1>Sistema de Claim Sala Crypto</p1>
+            <!-- CORRIGIDO: <p1> não é tag HTML válida, substituído por <p> -->
+            <p>Sistema de Claim Sala Crypto</p>
 
             <div class="auth-tabs">
                 <button class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
@@ -54,26 +55,30 @@
 
     <div class="app-container" id="appContainer" style="display: none;">
         <header class="main-header">
-            <h1>Peak and Magic Square</h1>
+            <div class="header-left">
+                <span class="header-title">Peak & Magic</span>
+                <nav class="main-tab-nav">
+                    <button class="main-tab-btn active" id="tabTimers" onclick="switchMainTab('timers')">Timers</button>
+                    <button class="main-tab-btn" id="tabSchedule" onclick="switchMainTab('schedule')">Horários</button>
+                    <button class="main-tab-btn" id="tabPresence" onclick="switchMainTab('presence')">Presença</button>
+                    <button class="main-tab-btn" id="tabRanking" onclick="switchMainTab('ranking')" style="display:none;">Relatório</button>
+                </nav>
+            </div>
             <div class="header-right">
-                <button id="themeToggleBtn" class="btn-theme" onclick="toggleTheme()"
-                    title="Alternar Tema Claro/Escuro">☀️</button>
-                <div class="user-info" id="userInfo">
-                    <span class="boss-icon">👤</span> <span id="displayNickname">User</span> <span
-                        style="color:var(--text-muted)">|</span> <span id="displayServer"
-                        style="color:var(--text-secondary); font-size:0.9rem">SV</span>
-                    <button class="btn-logout" onclick="performLogout()" title="Sair / Logoff">🚪 Sair</button>
-                </div>
                 <div class="clock" id="mainClock">00:00:00</div>
+                <div class="user-info" id="userInfo">
+                    <span id="displayNickname">User</span> <span id="displayServer" style="color:var(--text-muted); font-size:0.85rem"></span>
+                </div>
+                <button id="themeToggleBtn" class="btn-header-icon" onclick="toggleTheme()" title="Tema">☀️</button>
+                <button id="btnNotification" class="btn-header-icon" onclick="requestNotificationPermission()" title="Alertas">🔔</button>
+                <button class="btn-header-icon" onclick="performLogout()" title="Sair">🚪</button>
             </div>
         </header>
 
-        <nav class="main-tab-nav">
-            <button class="main-tab-btn active" id="tabTimers" onclick="switchMainTab('timers')">Timers do Piso</button>
-            <button class="main-tab-btn" id="tabSchedule" onclick="switchMainTab('schedule')">Horários Fixos (SA)</button>
-            <button class="main-tab-btn" id="tabPresence" onclick="switchMainTab('presence')">Presença</button>
-            <button class="main-tab-btn" id="tabRanking" onclick="switchMainTab('ranking')">Relatório Semanal</button>
-        </nav>
+        <div class="active-timers-bar" id="activeTimersBar">
+            <div class="active-timers" id="activeTimers">
+            </div>
+        </div>
 
         <nav class="floor-nav" id="floorNav">
             <button class="floor-btn active" onclick="changeFloor(7)">PISO 7</button>
@@ -81,15 +86,6 @@
             <button class="floor-btn" onclick="changeFloor(9)">PISO 9</button>
             <button class="floor-btn" onclick="changeFloor(10)">PISO 10</button>
         </nav>
-
-        <div class="active-timers-bar" id="activeTimersBar">
-            <div class="active-timers" id="activeTimers">
-                </div>
-            <div class="timer-actions">
-                <button class="btn btn-danger" onclick="clearAllTimers()">🗑️ Limpar Todos</button>
-                <button class="btn btn-secondary" onclick="exportTimers()">📋 Exportar</button>
-            </div>
-        </div>
 
         <div class="main-grid" id="mainGrid">
 
@@ -231,8 +227,10 @@
                             <button class="btn btn-gold-resource" onclick="registerKill('minerio', 60)">
                                 ⛏️ Minério
                             </button>
+                            <div id="minerio-live" class="live-countdown ready">PRONTO</div>
                         </div>
                     </div>
+
                     <div class="panel panel-resource">
                         <div class="panel-header gold-resource-header">Planta Dourada <span
                                 class="cooldown-badge">1h</span></div>
@@ -250,25 +248,7 @@
                             <button class="btn btn-gold-resource" onclick="registerKill('planta', 60)">
                                 🌿 Planta
                             </button>
-                        </div>
-                    </div>
-                    <div class="panel panel-resource">
-                        <div class="panel-header gold-resource-header">Energia Dourada <span
-                                class="cooldown-badge">1h</span></div>
-                        <div class="panel-body">
-                            <table class="timer-table compact">
-                                <tr class="row-killed">
-                                    <td>Timer Pegou</td>
-                                    <td id="energia-morreu">--:--:--</td>
-                                </tr>
-                                <tr class="row-respawn">
-                                    <td>Timer Nasce</td>
-                                    <td id="energia-nasceu">--:--:--</td>
-                                </tr>
-                            </table>
-                            <button class="btn btn-gold-resource" onclick="registerKill('energia', 60)">
-                                ⚡ Energia
-                            </button>
+                            <div id="planta-live" class="live-countdown ready">PRONTO</div>
                         </div>
                     </div>
                 </div>
@@ -277,109 +257,31 @@
             <div class="right-column">
 
                 <div class="panel panel-purple">
-                    <div class="panel-header purple-header">Bosses Praça</div>
-                    <div class="panel-body">
-                        <table class="timer-table">
-                            <thead>
-                                <tr>
-                                    <th>Qual Boss?</th>
-                                    <th>Líder 2</th>
-                                    <th>Líder 1</th>
-                                    <th>Selar</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr class="row-killed">
-                                    <td>Timer Morreu</td>
-                                    <td id="lider2-morreu">--:--:--</td>
-                                    <td id="lider1-morreu">--:--:--</td>
-                                    <td id="selar-morreu">--:--:--</td>
-                                </tr>
-                                <tr class="row-respawn">
-                                    <td>Timer Nasceu</td>
-                                    <td id="lider2-nasceu">--:--:--</td>
-                                    <td id="lider1-nasceu">--:--:--</td>
-                                    <td id="selar-nasceu">--:--:--</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div class="btn-group">
-                            <button class="btn btn-purple" onclick="registerKill('lider2', 60)">
-                                💀 Líder 2
-                            </button>
-                            <button class="btn btn-purple" onclick="registerKill('lider1', 30)">
-                                💀 Líder 1
-                            </button>
-                            <button class="btn btn-purple" onclick="registerKill('selar', 60)">
-                                ⚔️ Selar
-                            </button>
+                    <div class="panel-header purple-header">Líderes</div>
+                    <div class="panel-body leaders-body">
+                        <div class="leaders-container">
+                            <div class="leader-card leader-card-1">
+                                <div class="leader-icon">👑</div>
+                                <div class="leader-name">Líder 1</div>
+                                <div class="leader-subtitle">Próximo Nascimento</div>
+                                <div class="leader-timer" id="lider1-nasceu">00:00:00</div>
+                                <button class="btn btn-purple" onclick="registerKill('lider1', 30)">Matou</button>
+                            </div>
+                            <div class="leader-card leader-card-2">
+                                <div class="leader-icon">💎</div>
+                                <div class="leader-name">Líder 2</div>
+                                <div class="leader-subtitle">Próximo Nascimento</div>
+                                <div class="leader-timer" id="lider2-nasceu">00:00:00</div>
+                                <button class="btn btn-purple" onclick="registerKill('lider2', 60)">Matou</button>
+                            </div>
+                            <div class="leader-card leader-card-3">
+                                <div class="leader-icon">⚔️</div>
+                                <div class="leader-name">Líder 3</div>
+                                <div class="leader-subtitle">Próximo Nascimento</div>
+                                <div class="leader-timer" id="lider3-nasceu">00:00:00</div>
+                                <button class="btn btn-purple" onclick="registerKill('lider3', 60)">Matou</button>
+                            </div>
                         </div>
-                    </div>
-                </div>
-
-                <div class="panel panel-red-schedule">
-                    <div class="panel-header red-header">Reds e Liders 3 <span class="cooldown-badge">30min</span></div>
-                    <div class="panel-body">
-                        <table class="schedule-table">
-                            <thead>
-                                <tr>
-                                    <th>Horário</th>
-                                    <th>Piso</th>
-                                    <th>Praça</th>
-                                    <th>Horário</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td class="schedule-time">1H</td>
-                                    <td><input type="text" class="schedule-input" id="pico-1" placeholder="FREE"></td>
-                                    <td><input type="text" class="schedule-input" id="praca-1" placeholder="FREE"></td>
-                                    <td class="schedule-time">0H</td>
-                                </tr>
-                                <tr>
-                                    <td class="schedule-time">4H</td>
-                                    <td><input type="text" class="schedule-input" id="pico-4" placeholder="FREE"></td>
-                                    <td><input type="text" class="schedule-input" id="praca-4" placeholder="FREE"></td>
-                                    <td class="schedule-time">3H</td>
-                                </tr>
-                                <tr>
-                                    <td class="schedule-time">7H</td>
-                                    <td><input type="text" class="schedule-input" id="pico-7" placeholder="FREE"></td>
-                                    <td><input type="text" class="schedule-input" id="praca-7" placeholder="FREE"></td>
-                                    <td class="schedule-time">6H</td>
-                                </tr>
-                                <tr>
-                                    <td class="schedule-time">10H</td>
-                                    <td><input type="text" class="schedule-input" id="pico-10" placeholder="FREE"></td>
-                                    <td><input type="text" class="schedule-input" id="praca-10" placeholder="FREE"></td>
-                                    <td class="schedule-time">9H</td>
-                                </tr>
-                                <tr>
-                                    <td class="schedule-time">13H</td>
-                                    <td><input type="text" class="schedule-input" id="pico-13" placeholder="FREE"></td>
-                                    <td><input type="text" class="schedule-input" id="praca-13" placeholder="FREE"></td>
-                                    <td class="schedule-time">12H</td>
-                                </tr>
-                                <tr>
-                                    <td class="schedule-time">16H</td>
-                                    <td><input type="text" class="schedule-input" id="pico-16" placeholder="FREE"></td>
-                                    <td><input type="text" class="schedule-input" id="praca-16" placeholder="FREE"></td>
-                                    <td class="schedule-time">15H</td>
-                                </tr>
-                                <tr>
-                                    <td class="schedule-time">19H</td>
-                                    <td><input type="text" class="schedule-input" id="pico-19" placeholder="FREE"></td>
-                                    <td><input type="text" class="schedule-input" id="praca-19" placeholder="FREE"></td>
-                                    <td class="schedule-time">18H</td>
-                                </tr>
-                                <tr>
-                                    <td class="schedule-time">22H</td>
-                                    <td><input type="text" class="schedule-input" id="pico-22" placeholder="FREE"></td>
-                                    <td><input type="text" class="schedule-input" id="praca-22" placeholder="FREE"></td>
-                                    <td class="schedule-time">21H</td>
-                                </tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
 
@@ -404,6 +306,10 @@
                         </div>
                     </div>
                 </div>
+                <div class="timer-actions-bar">
+                    <button class="btn btn-danger" onclick="clearAllTimers()">🗑️ Limpar Todos</button>
+                    <button class="btn btn-secondary" onclick="exportTimers()">📋 Exportar</button>
+                </div>
             </div>
         </div>
 
@@ -414,24 +320,54 @@
                         <div class="panel-header yellow-header">World Boss</div>
                         <div class="panel-body">
                             <table class="timer-table fixed-schedule">
-                                <tr><td>Segunda 23:00</td><td>Krukan</td></tr>
-                                <tr><td>Terça 23:00</td><td>Nerkan</td></tr>
-                                <tr><td>Quarta 23:00</td><td>Hellbar</td></tr>
-                                <tr><td>Quinta 23:00</td><td>Turkan</td></tr>
-                                <tr><td>Sexta 23:00</td><td>Utukan</td></tr>
+                                <tr>
+                                    <td>Segunda 23:00</td>
+                                    <td>Krukan</td>
+                                </tr>
+                                <tr>
+                                    <td>Terça 23:00</td>
+                                    <td>Nerkan</td>
+                                </tr>
+                                <tr>
+                                    <td>Quarta 23:00</td>
+                                    <td>Hellbar</td>
+                                </tr>
+                                <tr>
+                                    <td>Quinta 23:00</td>
+                                    <td>Turkan</td>
+                                </tr>
+                                <tr>
+                                    <td>Sexta 23:00</td>
+                                    <td>Utukan</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
-                    
+
                     <div class="panel panel-info">
                         <div class="panel-header info-header">Eventos Diários</div>
                         <div class="panel-body">
                             <table class="timer-table fixed-schedule">
-                                <tr><td>Labirinto</td><td>10:00 | 20:00</td></tr>
-                                <tr><td>Vale</td><td>12:00 | 22:00</td></tr>
-                                <tr><td>Touro</td><td>22:00</td></tr>
-                                <tr><td>Velho</td><td>00:00</td></tr>
-                                <tr><td>5F Hydra</td><td>00:00</td></tr>
+                                <tr>
+                                    <td>Labirinto</td>
+                                    <td>10:00 | 20:00</td>
+                                </tr>
+                                <tr>
+                                    <td>Vale</td>
+                                    <td>12:00 | 22:00</td>
+                                </tr>
+                                <tr>
+                                    <td>Touro</td>
+                                    <td>22:00</td>
+                                </tr>
+                                <tr>
+                                    <td>Velho</td>
+                                    <td>00:00</td>
+                                </tr>
+                                <tr>
+                                    <td>5F Hydra</td>
+                                    <td>00:00</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
@@ -442,10 +378,22 @@
                         <div class="panel-header purple-header">Praça Mágica - Líder 3</div>
                         <div class="panel-body">
                             <table class="timer-table fixed-schedule">
-                                <tr><td>Madrugada</td><td>00:00 | 03:00</td></tr>
-                                <tr><td>Manhã</td><td>06:00 | 09:00</td></tr>
-                                <tr><td>Tarde</td><td>12:00 | 15:00 | 18:00</td></tr>
-                                <tr><td>Noite</td><td>21:00</td></tr>
+                                <tr>
+                                    <td>Madrugada</td>
+                                    <td>00:00 | 03:00</td>
+                                </tr>
+                                <tr>
+                                    <td>Manhã</td>
+                                    <td>06:00 | 09:00</td>
+                                </tr>
+                                <tr>
+                                    <td>Tarde</td>
+                                    <td>12:00 | 15:00 | 18:00</td>
+                                </tr>
+                                <tr>
+                                    <td>Noite</td>
+                                    <td>21:00</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
@@ -454,20 +402,42 @@
                         <div class="panel-header red-header">Pico Secreto - Boss Red</div>
                         <div class="panel-body">
                             <table class="timer-table fixed-schedule">
-                                <tr><td style="color:var(--red-primary)">SUL</td><td>01:00 | 07:00 | 13:00 | 19:00</td></tr>
-                                <tr><td style="color:var(--red-primary)">NORTE</td><td>04:00 | 10:00 | 16:00 | 22:00</td></tr>
+                                <tr>
+                                    <td style="color:var(--red-primary)">SUL</td>
+                                    <td>01:00 | 07:00 | 13:00 | 19:00</td>
+                                </tr>
+                                <tr>
+                                    <td style="color:var(--red-primary)">NORTE</td>
+                                    <td>04:00 | 10:00 | 16:00 | 22:00</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
-                    
+
                     <div class="panel panel-green">
                         <div class="panel-header green-header">Dominação - Torre</div>
                         <div class="panel-body">
                             <table class="timer-table fixed-schedule compact">
-                                <tr><th>Horário</th><th>Juja</th><th>Evento</th></tr>
-                                <tr><td>09:00 - 13:00</td><td>11:00</td><td>10:00 / 12:00</td></tr>
-                                <tr><td>15:00 - 19:00</td><td>17:00</td><td>16:00 / 18:00</td></tr>
-                                <tr><td>21:00 - 01:00</td><td>23:00</td><td>22:00 / 00:00</td></tr>
+                                <tr>
+                                    <th>Horário</th>
+                                    <th>Juja</th>
+                                    <th>Evento</th>
+                                </tr>
+                                <tr>
+                                    <td>09:00 - 13:00</td>
+                                    <td>11:00</td>
+                                    <td>10:00 / 12:00</td>
+                                </tr>
+                                <tr>
+                                    <td>15:00 - 19:00</td>
+                                    <td>17:00</td>
+                                    <td>16:00 / 18:00</td>
+                                </tr>
+                                <tr>
+                                    <td>21:00 - 01:00</td>
+                                    <td>23:00</td>
+                                    <td>22:00 / 00:00</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
@@ -478,30 +448,54 @@
                         <div class="panel-header info-header">Praça 11 - MS 11</div>
                         <div class="panel-body">
                             <table class="timer-table fixed-schedule">
-                                <tr><td>Fury</td><td>05:00 | 11:00 | 17:00 | 23:00</td></tr>
-                                <tr><td>Frenzy</td><td>08:00 | 14:00 | 20:00 | 02:00</td></tr>
+                                <tr>
+                                    <td>Fury</td>
+                                    <td>05:00 | 11:00 | 17:00 | 23:00</td>
+                                </tr>
+                                <tr>
+                                    <td>Frenzy</td>
+                                    <td>08:00 | 14:00 | 20:00 | 02:00</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
-                    
+
                     <div class="panel panel-yellow">
                         <div class="panel-header yellow-header">Pico 11 - SP 11</div>
                         <div class="panel-body">
                             <table class="timer-table fixed-schedule">
-                                <tr><td>Boss Sul</td><td>07:00 | 19:00</td></tr>
-                                <tr><td>Boss Norte</td><td>13:00 | 01:00</td></tr>
+                                <tr>
+                                    <td>Boss Sul</td>
+                                    <td>07:00 | 19:00</td>
+                                </tr>
+                                <tr>
+                                    <td>Boss Norte</td>
+                                    <td>13:00 | 01:00</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
-                    
+
                     <div class="panel panel-gold-resource">
                         <div class="panel-header gold-resource-header">Purgatório</div>
                         <div class="panel-body">
                             <table class="timer-table fixed-schedule">
-                                <tr><td>1º Horário</td><td>06:00</td></tr>
-                                <tr><td>2º Horário</td><td>12:00</td></tr>
-                                <tr><td>3º Horário</td><td>18:00</td></tr>
-                                <tr><td>4º Horário</td><td>00:00</td></tr>
+                                <tr>
+                                    <td>1º Horário</td>
+                                    <td>06:00</td>
+                                </tr>
+                                <tr>
+                                    <td>2º Horário</td>
+                                    <td>12:00</td>
+                                </tr>
+                                <tr>
+                                    <td>3º Horário</td>
+                                    <td>18:00</td>
+                                </tr>
+                                <tr>
+                                    <td>4º Horário</td>
+                                    <td>00:00</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
@@ -509,54 +503,89 @@
             </div>
         </div>
 
-        <div class="presence-container" id="presenceContainer" style="display: none; padding: 20px 24px; max-width: 600px; margin: 0 auto; width: 100%;">
+        <div class="presence-container" id="presenceContainer"
+            style="display: none; padding: 20px 24px; max-width: 700px; margin: 0 auto; width: 100%;">
             <div class="panel panel-info">
-                <div class="panel-header info-header">Registrar Presença (5 Pontos)</div>
+                <div class="panel-header info-header">Registrar Presença (1 Ponto)</div>
                 <div class="panel-body">
                     <div class="presence-form" style="display:flex; flex-direction:column; gap:15px;">
-                        <label for="presenceEvent" style="font-weight:600; color:var(--text-secondary);">O que foi lutado? / What was fought for?</label>
+
+                        <label for="presenceEvent" style="font-weight:600; color:var(--text-secondary);">O que foi
+                            lutado? / What was fought for?</label>
                         <select id="presenceEvent" class="schedule-input" style="padding:10px;">
                             <option value="">Selecione...</option>
                             <option value="BOSS RED PICO / BOSS RED SP">BOSS RED PICO / BOSS RED SP</option>
                             <option value="LÍDER 3 PRAÇA / LEADER 3 MS">LÍDER 3 PRAÇA / LEADER 3 MS</option>
                             <option value="WORLDBOSS">WORLDBOSS</option>
-                            <option value="EVENTOS GLOBAIS / GLOBAL EVENTS">EVENTOS GLOBAIS / GLOBAL EVENTS (Lab, Vale, Touro...)</option>
+                            <option value="EVENTOS GLOBAIS / GLOBAL EVENTS">EVENTOS GLOBAIS / GLOBAL EVENTS</option>
                             <option value="TORRE">TORRE</option>
                             <option value="PURGATÓRIO / PURGATORY">PURGATÓRIO / PURGATORY</option>
                         </select>
 
-                        <label style="font-weight:600; color:var(--text-secondary);">Comprovação (Print)</label>
-                        <div id="dropZone" class="drop-zone schedule-input" style="padding: 30px; text-align: center; border: 2px dashed var(--border-default); cursor: pointer; position: relative;">
-                            <span id="dropZoneText">Arraste a imagem, cole (Ctrl+V) ou clique para selecionar</span>
-                            <input type="file" id="presenceImage" accept="image/*" style="display:none;">
-                            <img id="imagePreview" src="" alt="Preview" style="display:none; max-width:100%; max-height:200px; margin-top:10px; border-radius:8px; margin-left:auto; margin-right:auto;">
-                            <button id="btnRemoveImage" class="btn-danger btn-small" style="display:none; position: absolute; top: 10px; right: 10px; border-radius: 50%; width: 30px; height: 30px; padding: 0; font-weight: bold;">X</button>
+                        <div id="subEventContainer" style="display:none; flex-direction:column; gap:8px;">
+                            <label id="subEventLabel" for="presenceSubEvent"
+                                style="font-weight:600; color:var(--text-secondary);">Opção / Horário *</label>
+                            <select id="presenceSubEvent" class="schedule-input" style="padding:10px;">
+                            </select>
                         </div>
 
-                        <button id="btnSubmitPresence" class="btn-theme" style="margin-top: 10px; width: 100%; padding: 12px; font-weight:700;" onclick="submitPresence()">ENVIAR PRESENÇA</button>
+                        <label style="font-weight:600; color:var(--text-secondary);">Link da Print (Imgur, Discord, etc)</label>
+                        <input type="url" id="presenceImageUrl" class="schedule-input" placeholder="Cole o link da imagem aqui (ex: https://imgur.com/...)" style="padding:10px;">
+                        <small style="color:var(--text-muted); display:block; margin-top:5px;">💡 Use Imgur, Discord ou qualquer servidor de imagens</small>
+
+                        <button id="btnSubmitPresence" class="btn-theme"
+                            style="margin-top: 15px; width: 100%; padding: 12px; font-weight:700;"
+                            onclick="submitPresence()">ENVIAR PRESENÇA</button>
                         <div id="presenceMessage" style="text-align:center; font-weight:bold;"></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="ranking-container" id="rankingContainer" style="display: none; padding: 20px 24px; max-width: 800px; margin: 0 auto; width: 100%;">
+        <div class="ranking-container" id="rankingContainer"
+            style="display: none; padding: 20px 24px; max-width: 900px; margin: 0 auto; width: 100%;">
+            
             <div class="panel panel-gold-resource">
-                <div class="panel-header gold-resource-header">Relatório Semanal de Liderança</div>
+                <div class="panel-header gold-resource-header" id="rankingTitle">Relatório Semanal de Liderança</div>
                 <div class="panel-body">
-                    <p style="text-align:center; color:var(--text-secondary); margin-bottom:15px;">A pontuação é resetada todo domingo às 23:59. Cada presença vale 5 pontos.</p>
+                    <p style="text-align:center; color:var(--text-secondary); margin-bottom:15px;">Cada presença vale 1 ponto. Tabela atualizada em tempo real.</p>
                     <table class="timer-table" id="rankingTable">
                         <thead>
                             <tr>
                                 <th>Posição</th>
                                 <th>Jogador</th>
+                                <th>Servidor</th>
+                                <th>Presenças</th>
                                 <th>Pontos</th>
                             </tr>
                         </thead>
                         <tbody id="rankingBody">
-                            </tbody>
+                        </tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- Top 10 com scroll horizontal -->
+            <div class="ranking-top10-container" style="margin-top:30px; position:relative;">
+                <div class="panel panel-gold-resource">
+                    <div class="panel-header gold-resource-header">🏆 Top 10 Mais Ativos - Scroll ➡️</div>
+                    <div class="panel-body">
+                        <div class="top10-scroller" id="top10Scroller" style="display:flex; overflow-x:hidden; gap:15px; padding:10px 0; position:relative; height:140px;">
+                            <!-- Preenchido dinamicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Prints do Jogador -->
+        <div class="modal-overlay" id="modalOverlay" onclick="closePlayerPrintsModal()"></div>
+        <div class="player-prints-modal" id="playerPrintsModal">
+            <div class="modal-header">
+                <div class="modal-title" id="modalPlayerName">Prints do Jogador</div>
+                <button class="modal-close" onclick="closePlayerPrintsModal()">✕</button>
+            </div>
+            <div class="modal-content" id="modalContent">
             </div>
         </div>
 
@@ -564,19 +593,17 @@
             <div class="activity-log-container">
                 <div class="activity-log-header">
                     <span>📜 Log de Atividades (Piso <span id="currentFloorLog">7</span>)</span>
-                    <button class="btn btn-small" onclick="clearLog()">Limpar</button>
+                    <!-- CORRIGIDO: botão agora esconde entradas na tela sem apagar da nuvem -->
+                    <button class="btn btn-small" onclick="clearLogView()">Limpar Vista</button>
                 </div>
                 <div class="activity-log" id="activityLog">
-                    </div>
+                </div>
             </div>
         </footer>
     </div>
 
-    <audio id="alertSound" preload="auto">
-        <source
-            src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczHjqIxN/RgDwYMIG/4danVCETTZzI2bBjJxM7hcLf0oo+GT2Gv9/WplQgEk+dyNqwYicTPIXC39GIPRg9h7/g1qZTIBJPnsjasGInEzyFwt/SiT4ZPoe/4NamUyAST5/J2rFjJxQ8hcLf0ok+GT6Hv+DWplIgEk+gyduyZCgVPIbD4NWnVSATT6HK3LNmKhc/h8Xk2KxeLB1Up9Y"
-            type="audio/wav">
-    </audio>
+    <!-- CORRIGIDO: audio base64 substituído por beep gerado via Web Audio API no app.js -->
+    <audio id="alertSound" preload="auto"></audio>
 
     <script type="module" src="app.js"></script>
 </body>
