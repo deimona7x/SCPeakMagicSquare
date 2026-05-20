@@ -464,6 +464,17 @@ body {
     box-shadow: 0 0 20px var(--purple-glow);
 }
 
+.btn-blue {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: #3b82f6;
+    color: #60a5fa;
+}
+
+.btn-blue:hover {
+    background: rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
 /* Gold Resource Buttons */
 .btn-gold-resource {
     background: var(--gold-bg);
@@ -749,6 +760,18 @@ body {
     background: var(--purple-bg);
     border-color: var(--purple-primary);
     color: var(--purple-primary);
+}
+
+.chip-blue {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: #3b82f6;
+    color: #60a5fa;
+}
+
+.chip-red {
+    background: var(--red-bg);
+    border-color: var(--red-primary);
+    color: var(--red-primary);
 }
 
 @keyframes pulse-soft {
@@ -1114,6 +1137,39 @@ body {
     letter-spacing: 0.5px;
 }
 
+.staff-server-control {
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: rgba(168, 85, 247, 0.08);
+}
+
+.staff-server-control label {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.staff-server-control select {
+    min-width: 86px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.staff-server-control option {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+}
+
 .btn-header-icon {
     background: transparent;
     border: none;
@@ -1271,6 +1327,263 @@ body {
 
 .panel-purple:hover {
     box-shadow: 0 0 30px var(--purple-glow);
+}
+
+/* ============================================
+   MAGIC SQUARE SIDE PANEL
+   ============================================ */
+.magic-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.magic-card {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.96), rgba(17, 24, 39, 0.86));
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.magic-card-purple {
+    border-color: rgba(168, 85, 247, 0.35);
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.5), rgba(26, 31, 46, 0.94));
+}
+
+.magic-card-blue {
+    border-color: rgba(59, 130, 246, 0.35);
+    background: linear-gradient(135deg, rgba(30, 64, 175, 0.42), rgba(26, 31, 46, 0.94));
+}
+
+.magic-card-gold {
+    border-color: rgba(234, 179, 8, 0.35);
+    background: linear-gradient(135deg, rgba(113, 63, 18, 0.5), rgba(26, 31, 46, 0.94));
+}
+
+.magic-card-red {
+    border-color: rgba(239, 68, 68, 0.35);
+    background: linear-gradient(135deg, rgba(127, 29, 29, 0.5), rgba(26, 31, 46, 0.94));
+}
+
+.magic-icon {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid currentColor;
+    background: rgba(0, 0, 0, 0.22);
+    color: var(--text-primary);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 900;
+    text-shadow: 0 0 10px currentColor;
+}
+
+.magic-content {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.magic-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.magic-card-purple .magic-title {
+    color: var(--purple-primary);
+}
+
+.magic-card-blue .magic-title {
+    color: #60a5fa;
+}
+
+.magic-card-gold .magic-title {
+    color: var(--gold-primary);
+}
+
+.magic-card-red .magic-title {
+    color: var(--red-primary);
+}
+
+.magic-subtitle {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.magic-timer {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.claim-status {
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.claim-free {
+    color: var(--green-primary);
+}
+
+.claim-busy {
+    color: var(--yellow-primary);
+}
+
+.claim-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.claim-empty,
+.claim-row {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 4px 6px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: rgba(0, 0, 0, 0.16);
+}
+
+.claim-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--text-primary);
+}
+
+.claim-tag,
+.claim-count {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: var(--green-primary);
+}
+
+.claim-tag.waiting {
+    color: var(--text-muted);
+}
+
+.claim-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.claim-actions .btn,
+.leader-compact .btn {
+    padding: 6px 8px;
+    font-size: 0.68rem;
+    justify-content: center;
+}
+
+.claim-actions .btn-gold-resource {
+    width: auto;
+}
+
+.leaders-panel {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.96), rgba(17, 24, 39, 0.86));
+}
+
+.leaders-title {
+    padding: 10px 12px;
+    text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-default);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.praca-claim {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-default);
+    background: rgba(168, 85, 247, 0.06);
+}
+
+.praca-claim .claim-actions {
+    justify-content: center;
+}
+
+.praca-claim .btn {
+    padding: 7px 12px;
+}
+
+.approval-actions {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.approval-actions .btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+}
+
+.leaders-compact {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.leader-compact {
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+    text-align: center;
+    border-right: 1px solid var(--border-default);
+}
+
+.leader-compact:last-child {
+    border-right: none;
+}
+
+.leader-compact-purple .leader-name,
+.leader-compact-purple .leader-timer {
+    color: var(--purple-primary);
+}
+
+.leader-compact-blue .leader-name,
+.leader-compact-blue .leader-timer {
+    color: #60a5fa;
+}
+
+.leader-compact-gold .leader-name,
+.leader-compact-gold .leader-timer {
+    color: var(--gold-primary);
 }
 
 /* ============================================

@@ -4,7 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Peak and Magic Square - Timer de Respawn</title>
+    <title>SalaCrypto</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="shortcut icon" href="favicon.svg">
     <link rel="stylesheet" href="style.css">
     <link
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap"
@@ -43,10 +45,12 @@
                         <option value="SA">SA (América do Sul)</option>
                         <option value="NA">NA (América do Norte)</option>
                         <option value="EU">EU (Europa)</option>
+                        <option value="INMENA">INMENA</option>
                         <option value="ASIA">ASIA</option>
-                        <option value="MENA">MENA</option>
                     </select>
-                    <input type="text" id="regServer" placeholder="Servidor (ex: SA22)" required>
+                    <select id="regServer" required>
+                        <option value="" disabled selected>Selecione o Servidor</option>
+                    </select>
                     <button class="btn btn-green" onclick="performRegister()">Cadastrar e Entrar</button>
                 </div>
             </div>
@@ -61,10 +65,19 @@
                     <button class="main-tab-btn active" id="tabTimers" onclick="switchMainTab('timers')">Timers</button>
                     <button class="main-tab-btn" id="tabSchedule" onclick="switchMainTab('schedule')">Horários</button>
                     <button class="main-tab-btn" id="tabPresence" onclick="switchMainTab('presence')">Presença</button>
+                    <button class="main-tab-btn" id="tabApprovals" onclick="switchMainTab('approvals')" style="display:none;">Aprovações</button>
                     <button class="main-tab-btn" id="tabRanking" onclick="switchMainTab('ranking')" style="display:none;">Relatório</button>
                 </nav>
             </div>
             <div class="header-right">
+                <div class="staff-server-control" id="staffServerControl" style="display:none;">
+                    <label for="staffBlockSelect">Bloco</label>
+                    <select id="staffBlockSelect" onchange="changeStaffBlock(this.value)">
+                    </select>
+                    <label for="staffServerSelect">Servidor</label>
+                    <select id="staffServerSelect" onchange="changeStaffServer(this.value)">
+                    </select>
+                </div>
                 <div class="clock" id="mainClock">00:00:00</div>
                 <div class="user-info" id="userInfo">
                     <span id="displayNickname">User</span> <span id="displayServer" style="color:var(--text-muted); font-size:0.85rem"></span>
@@ -256,30 +269,118 @@
 
             <div class="right-column">
 
-                <div class="panel panel-purple">
-                    <div class="panel-header purple-header">Líderes</div>
-                    <div class="panel-body leaders-body">
-                        <div class="leaders-container">
-                            <div class="leader-card leader-card-1">
-                                <div class="leader-icon">👑</div>
+                <div class="magic-sidebar">
+                    <div class="magic-card magic-card-purple">
+                        <div class="magic-icon">💎</div>
+                        <div class="magic-content">
+                            <div class="magic-title">Pedra Mágica III</div>
+                            <div class="magic-subtitle">Próximo Nascimento</div>
+                            <div class="magic-timer" id="pedra-magica-iii-nasceu">00:00:00</div>
+                            <div class="claim-status claim-free" id="pedra-magica-iii-claim-status">Fila livre</div>
+                            <div class="claim-list" id="pedra-magica-iii-claim-list"></div>
+                            <div class="claim-actions">
+                                <span class="claim-count" id="pedra-magica-iii-claim-count">0/3</span>
+                                <button class="btn btn-purple" onclick="registerKill('pedra-magica-iii', 60)">Marcar</button>
+                                <button class="btn btn-purple" onclick="claimTarget('pedra-magica-iii', 1)">1 Ticket</button>
+                                <button class="btn btn-purple" onclick="claimTarget('pedra-magica-iii', 2)">2 Tickets</button>
+                                <button class="btn btn-purple" onclick="claimTarget('pedra-magica-iii', 3)">3 Tickets</button>
+                                <button class="btn btn-secondary" onclick="finishClaim('pedra-magica-iii')">Finalizar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="magic-card magic-card-blue">
+                        <div class="magic-icon">EXP</div>
+                        <div class="magic-content">
+                            <div class="magic-title">XP 3</div>
+                            <div class="magic-subtitle">Próximo Nascimento</div>
+                            <div class="magic-timer" id="xp3-nasceu">00:00:00</div>
+                            <div class="claim-status claim-free" id="xp3-claim-status">Fila livre</div>
+                            <div class="claim-list" id="xp3-claim-list"></div>
+                            <div class="claim-actions">
+                                <span class="claim-count" id="xp3-claim-count">0/3</span>
+                                <button class="btn btn-blue" onclick="registerKill('xp3', 60)">Marcar</button>
+                                <button class="btn btn-blue" onclick="claimTarget('xp3', 1)">1 Ticket</button>
+                                <button class="btn btn-blue" onclick="claimTarget('xp3', 2)">2 Tickets</button>
+                                <button class="btn btn-blue" onclick="claimTarget('xp3', 3)">3 Tickets</button>
+                                <button class="btn btn-secondary" onclick="finishClaim('xp3')">Finalizar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="magic-card magic-card-gold">
+                        <div class="magic-icon">🪙</div>
+                        <div class="magic-content">
+                            <div class="magic-title">Ouro 3</div>
+                            <div class="magic-subtitle">Próximo Nascimento</div>
+                            <div class="magic-timer" id="ouro3-nasceu">00:00:00</div>
+                            <div class="claim-status claim-free" id="ouro3-claim-status">Fila livre</div>
+                            <div class="claim-list" id="ouro3-claim-list"></div>
+                            <div class="claim-actions">
+                                <span class="claim-count" id="ouro3-claim-count">0/3</span>
+                                <button class="btn btn-gold-resource" onclick="registerKill('ouro3', 60)">Marcar</button>
+                                <button class="btn btn-gold-resource" onclick="claimTarget('ouro3', 1)">1 Ticket</button>
+                                <button class="btn btn-gold-resource" onclick="claimTarget('ouro3', 2)">2 Tickets</button>
+                                <button class="btn btn-gold-resource" onclick="claimTarget('ouro3', 3)">3 Tickets</button>
+                                <button class="btn btn-secondary" onclick="finishClaim('ouro3')">Finalizar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="magic-card magic-card-red">
+                        <div class="magic-icon">☠</div>
+                        <div class="magic-content">
+                            <div class="magic-title">Anti Demon</div>
+                            <div class="magic-subtitle">Próximo Nascimento</div>
+                            <div class="magic-timer" id="anti-demon-nasceu">00:00:00</div>
+                            <div class="claim-status claim-free" id="anti-demon-claim-status">Fila livre</div>
+                            <div class="claim-list" id="anti-demon-claim-list"></div>
+                            <div class="claim-actions">
+                                <span class="claim-count" id="anti-demon-claim-count">0/3</span>
+                                <button class="btn btn-danger" onclick="registerKill('anti-demon', 60)">Marcar</button>
+                                <button class="btn btn-danger" onclick="claimTarget('anti-demon', 1)">1 Ticket</button>
+                                <button class="btn btn-danger" onclick="claimTarget('anti-demon', 2)">2 Tickets</button>
+                                <button class="btn btn-danger" onclick="claimTarget('anti-demon', 3)">3 Tickets</button>
+                                <button class="btn btn-secondary" onclick="finishClaim('anti-demon')">Finalizar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="leaders-panel">
+                        <div class="leaders-title">Líderes</div>
+                        <div class="praca-claim">
+                            <div class="claim-status claim-free" id="praca-magica-claim-status">Aguardando claim da praça</div>
+                            <div class="claim-list" id="praca-magica-claim-list"></div>
+                            <div class="claim-actions">
+                                <span class="claim-count" id="praca-magica-claim-count">0/3</span>
+                                <button class="btn btn-purple" onclick="claimTarget('praca-magica')">Claimar Praça</button>
+                                <button class="btn btn-secondary" onclick="finishClaim('praca-magica')">Finalizar</button>
+                            </div>
+                        </div>
+                        <div class="leaders-compact">
+                            <div class="leader-compact leader-compact-purple">
                                 <div class="leader-name">Líder 1</div>
+                                <span class="cooldown-badge">30min</span>
+                                <div class="leader-icon">👑</div>
                                 <div class="leader-subtitle">Próximo Nascimento</div>
                                 <div class="leader-timer" id="lider1-nasceu">00:00:00</div>
                                 <button class="btn btn-purple" onclick="registerKill('lider1', 30)">Matou</button>
                             </div>
-                            <div class="leader-card leader-card-2">
-                                <div class="leader-icon">💎</div>
+                            <div class="leader-compact leader-compact-blue">
                                 <div class="leader-name">Líder 2</div>
+                                <span class="cooldown-badge">1h</span>
+                                <div class="leader-icon">💎</div>
                                 <div class="leader-subtitle">Próximo Nascimento</div>
                                 <div class="leader-timer" id="lider2-nasceu">00:00:00</div>
-                                <button class="btn btn-purple" onclick="registerKill('lider2', 60)">Matou</button>
+                                <button class="btn btn-blue" onclick="registerKill('lider2', 60)">Matou</button>
                             </div>
-                            <div class="leader-card leader-card-3">
-                                <div class="leader-icon">⚔️</div>
+                            <div class="leader-compact leader-compact-gold">
                                 <div class="leader-name">Líder 3</div>
+                                <span class="cooldown-badge">horário fixo</span>
+                                <div class="leader-icon">⚔️</div>
                                 <div class="leader-subtitle">Próximo Nascimento</div>
                                 <div class="leader-timer" id="lider3-nasceu">00:00:00</div>
-                                <button class="btn btn-purple" onclick="registerKill('lider3', 60)">Matou</button>
+                                <button class="btn btn-gold-resource" onclick="registerKill('lider3', 0)">Matou</button>
                             </div>
                         </div>
                     </div>
@@ -574,6 +675,49 @@
                             <!-- Preenchido dinamicamente -->
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="approvals-container" id="approvalsContainer"
+            style="display: none; padding: 20px 24px; max-width: 900px; margin: 0 auto; width: 100%;">
+            <div class="panel panel-purple">
+                <div class="panel-header purple-header">Cadastros Pendentes</div>
+                <div class="panel-body">
+                    <table class="timer-table" id="approvalsTable">
+                        <thead>
+                            <tr>
+                                <th>Nickname</th>
+                                <th>E-mail</th>
+                                <th>Bloco</th>
+                                <th>Servidor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approvalsBody">
+                            <tr><td colspan="5">Carregando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel panel-info" style="margin-top:20px;">
+                <div class="panel-header info-header">Gerenciar Usuários</div>
+                <div class="panel-body">
+                    <table class="timer-table" id="usersManagementTable">
+                        <thead>
+                            <tr>
+                                <th>Nickname</th>
+                                <th>E-mail</th>
+                                <th>Servidor</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersManagementBody">
+                            <tr><td colspan="5">Carregando...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

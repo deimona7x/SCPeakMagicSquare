@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, orderBy, limit, addDoc, writeBatch, getDocs, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, orderBy, limit, addDoc, writeBatch, getDocs, where, runTransaction, deleteDoc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-storage.js";
 
 // Firebase configuration
@@ -28,9 +28,27 @@ let activityLogs = [];
 let unsubTimers = null;
 let unsubLogs = null;
 let unsubSchedule = null;
+let unsubClaims = null;
+let claimsData = { 7: {}, 8: {}, 9: {}, 10: {} };
 
 // CORRIGIDO: controla se a vista do log foi manualmente limpa
 let logViewCleared = false;
+const CLAIM_DURATION_MS = 30 * 60 * 1000;
+const LEADER3_SPAWN_HOURS = [0, 3, 6, 9, 12, 15, 18, 21];
+const BLOCK_TIME_ZONES = {
+    SA: 'America/Sao_Paulo',
+    NA: 'America/New_York',
+    EU: 'Europe/Berlin',
+    ASIA: 'Asia/Seoul',
+    INMENA: 'Asia/Dubai'
+};
+const SERVER_OPTIONS_BY_BLOCK = {
+    SA: ['SA011', 'SA012', 'SA013', 'SA014', 'SA021', 'SA022', 'SA023', 'SA031', 'SA032', 'SA033', 'SA041', 'BSA041'],
+    NA: ['NA011', 'NA012', 'NA013', 'NA014', 'NA021', 'NA022', 'NA023', 'NA031', 'NA032', 'NA033', 'NA041', 'BNA051'],
+    EU: ['EU011', 'EU012', 'EU014', 'EU021', 'EU022', 'EU023', 'EU024', 'EU031', 'BEU031'],
+    INMENA: ['INMENA013', 'INMENA014', 'INMENA021', 'INMENA022', 'INMENA023', 'INMENA024', 'INMENA031', 'BINMENA021'],
+    ASIA: ['ASIA011', 'ASIA012', 'ASIA014', 'ASIA021', 'ASIA023', 'ASIA024', 'ASIA031', 'ASIA032', 'ASIA033', 'ASIA034', 'ASIA041', 'ASIA051', 'ASIA052', 'ASIA053', 'ASIA061', 'ASIA062', 'ASIA063', 'ASIA081', 'ASIA082', 'ASIA091', 'ASIA311', 'ASIA313', 'ASIA314', 'ASIA321', 'ASIA322', 'ASIA323', 'ASIA324', 'ASIA331', 'ASIA332', 'ASIA333', 'ASIA334', 'ASIA341', 'BASIA011', 'BASIA012', 'BASIA013']
+};
 
 // Timer metadata
 const timerMeta = {
@@ -42,9 +60,21 @@ const timerMeta = {
     'verde-dir': { label: 'Verde Dir', chipClass: 'chip-green' },
     'minerio': { label: 'Minério', chipClass: 'chip-gold' },
     'planta': { label: 'Planta', chipClass: 'chip-gold' },
+    'pedra-magica-iii': { label: 'Pedra Mágica III', chipClass: 'chip-purple' },
+    'xp3': { label: 'XP 3', chipClass: 'chip-blue' },
+    'ouro3': { label: 'Ouro 3', chipClass: 'chip-gold' },
+    'anti-demon': { label: 'Anti Demon', chipClass: 'chip-red' },
     'lider1': { label: 'Líder 1', chipClass: 'chip-purple' },
-    'lider2': { label: 'Líder 2', chipClass: 'chip-purple' },
-    'lider3': { label: 'Líder 3', chipClass: 'chip-purple' },
+    'lider2': { label: 'Líder 2', chipClass: 'chip-blue' },
+    'lider3': { label: 'Líder 3', chipClass: 'chip-gold' },
+};
+
+const claimMeta = {
+    'pedra-magica-iii': { label: 'Pedra Mágica III', type: 'queue', maxSlots: 3, perUserMax: 3, repeatDelayMs: 5 * 60 * 1000 },
+    'xp3': { label: 'XP 3', type: 'queue', maxSlots: 3, perUserMax: 3, repeatDelayMs: 5 * 60 * 1000 },
+    'ouro3': { label: 'Ouro 3', type: 'queue', maxSlots: 3, perUserMax: 3, repeatDelayMs: 5 * 60 * 1000 },
+    'anti-demon': { label: 'Anti Demon', type: 'queue', maxSlots: 3, perUserMax: 3, repeatDelayMs: 5 * 60 * 1000 },
+    'praca-magica': { label: 'Praça Mágica', type: 'single-ticket', perUserMax: 3, repeatDelayMs: 5 * 60 * 1000 },
 };
 
 // Sub-Events Configuration
@@ -120,9 +150,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 1000);
     setInterval(updateActiveTimers, 1000);
+    setInterval(renderClaims, 1000);
     setInterval(checkAlerts, 5000);
 
     updateNotificationBtn();
+    setupRegisterServerSelects();
 
     // Schedule save events
     document.querySelectorAll('.schedule-input').forEach(input => {
@@ -178,14 +210,31 @@ onAuthStateChanged(auth, async (user) => {
 
         if (docSnap.exists()) {
             const data = docSnap.data();
+            const status = normalizeStatus(data.status);
+            const isMaster = isMasterUser(data);
             currentUser = {
                 uid: user.uid,
                 email: user.email,
                 nickname: data.nickname,
                 block: data.block,
-                server: data.server,
-                role: data.role || 'user'
+                server: normalizeServerName(data.server),
+                role: data.role || 'user',
+                status,
+                isMaster
             };
+
+            if (!currentUser.isMaster && status !== 'approved') {
+                const statusMessages = {
+                    disabled: 'Sua conta foi desativada por um Staff.',
+                    rejected: 'Seu cadastro foi rejeitado por um Staff.',
+                    pending: 'Seu cadastro está pendente de aprovação por um Staff.'
+                };
+                const message = statusMessages[status] || statusMessages.pending;
+                alert(message);
+                await signOut(auth);
+                return;
+            }
+
             currentServerView = currentUser.server;
 
             document.getElementById('loginModal').style.display = 'none';
@@ -194,11 +243,20 @@ onAuthStateChanged(auth, async (user) => {
             
             // Mostra Relatório Semanal apenas para MASTER
             const tabRanking = document.getElementById('tabRanking');
+            const tabApprovals = document.getElementById('tabApprovals');
             if (tabRanking) {
-                tabRanking.style.display = currentUser.role === 'MASTER' ? 'block' : 'none';
+                tabRanking.style.display = currentUser.isMaster ? 'block' : 'none';
+            }
+            if (tabApprovals) {
+                tabApprovals.style.display = currentUser.isMaster ? 'block' : 'none';
+            }
+            const staffServerControl = document.getElementById('staffServerControl');
+            if (staffServerControl) {
+                staffServerControl.style.display = currentUser.isMaster ? 'flex' : 'none';
             }
 
             changeFloor(7);
+            if (currentUser.isMaster) await loadStaffServerOptions();
             listenToServerData();
         }
     } else {
@@ -210,6 +268,7 @@ onAuthStateChanged(auth, async (user) => {
         if (unsubTimers) unsubTimers();
         if (unsubLogs) unsubLogs();
         if (unsubSchedule) unsubSchedule();
+        if (unsubClaims) unsubClaims();
     }
 });
 
@@ -217,9 +276,96 @@ function updateHeader() {
     if (!currentUser) return;
     document.getElementById('displayNickname').textContent = currentUser.nickname;
     let serverText = currentServerView;
-    if (currentUser.role === 'MASTER') serverText += ' 👑';
+    if (currentUser.isMaster) serverText += ' 👑';
     document.getElementById('displayServer').textContent = serverText;
 }
+
+async function loadStaffServerOptions() {
+    if (!currentUser?.isMaster) return;
+    const blockSelect = document.getElementById('staffBlockSelect');
+    if (!blockSelect) return;
+
+    const servers = new Set(Object.values(SERVER_OPTIONS_BY_BLOCK).flat());
+    try {
+        const snapshot = await getDocs(collection(db, "users"));
+        snapshot.forEach(userDoc => {
+            const server = normalizeServerName(userDoc.data().server);
+            if (server) servers.add(server);
+        });
+    } catch (error) {
+        console.warn('Não foi possível carregar servidores dos usuários:', error);
+    }
+
+    const groupedServers = groupServersByBlock(Array.from(servers));
+    window.staffServersByBlock = groupedServers;
+    const selectedServer = normalizeServerName(currentServerView) || normalizeServerName(currentUser.server);
+    const selectedBlock = inferBlockFromServer(selectedServer) || Object.keys(groupedServers)[0] || currentUser.block;
+
+    blockSelect.innerHTML = '';
+    Object.keys(groupedServers)
+        .filter(Boolean)
+        .sort(compareBlockNames)
+        .forEach(block => {
+            const option = document.createElement('option');
+            option.value = block;
+            option.textContent = block;
+            blockSelect.appendChild(option);
+        });
+
+    blockSelect.value = selectedBlock;
+    renderStaffServerSelect(selectedBlock, selectedServer);
+}
+
+function renderStaffServerSelect(block, preferredServer = null) {
+    const select = document.getElementById('staffServerSelect');
+    if (!select) return;
+    const servers = (window.staffServersByBlock?.[block] || SERVER_OPTIONS_BY_BLOCK[block] || []).sort(compareServerNames);
+
+    select.innerHTML = '';
+    servers.forEach(server => {
+        const option = document.createElement('option');
+        option.value = server;
+        option.textContent = server;
+        select.appendChild(option);
+    });
+
+    if (preferredServer && servers.includes(preferredServer)) {
+        select.value = preferredServer;
+    } else if (servers.length > 0) {
+        select.value = servers[0];
+    }
+}
+
+window.changeStaffBlock = function (block) {
+    if (!currentUser?.isMaster) return;
+    renderStaffServerSelect(block);
+    const select = document.getElementById('staffServerSelect');
+    if (select?.value) window.changeStaffServer(select.value);
+}
+
+window.changeStaffServer = function (server) {
+    if (!currentUser?.isMaster) return;
+    const normalizedServer = normalizeServerName(server);
+    if (!isValidServerName(normalizedServer)) {
+        alert('Servidor inválido. Exemplo: SA22.');
+        const select = document.getElementById('staffServerSelect');
+        if (select) select.value = currentServerView;
+        return;
+    }
+    currentServerView = normalizedServer;
+    const blockSelect = document.getElementById('staffBlockSelect');
+    const select = document.getElementById('staffServerSelect');
+    const block = inferBlockFromServer(normalizedServer);
+    if (blockSelect && blockSelect.value !== block) {
+        blockSelect.value = block;
+        renderStaffServerSelect(block, normalizedServer);
+    }
+    if (select) select.value = normalizedServer;
+    logViewCleared = false;
+    updateHeader();
+    listenToServerData();
+    changeFloor(currentFloor);
+};
 
 function listenToServerData() {
     if (!currentServerView) return;
@@ -227,6 +373,7 @@ function listenToServerData() {
     if (unsubTimers) unsubTimers();
     if (unsubLogs) unsubLogs();
     if (unsubSchedule) unsubSchedule();
+    if (unsubClaims) unsubClaims();
 
     const timersDoc = doc(db, "servers", currentServerView, "data", "timers");
     unsubTimers = onSnapshot(timersDoc, (docSnap) => {
@@ -256,6 +403,12 @@ function listenToServerData() {
             });
         }
     });
+
+    const claimsDoc = doc(db, "servers", currentServerView, "data", "claims");
+    unsubClaims = onSnapshot(claimsDoc, (docSnap) => {
+        claimsData = docSnap.exists() ? docSnap.data() : { 7: {}, 8: {}, 9: {}, 10: {} };
+        renderClaims();
+    });
 }
 
 window.toggleTheme = function () {
@@ -282,6 +435,36 @@ window.switchAuthTab = function (tabName) {
     }
 };
 
+function setupRegisterServerSelects() {
+    const blockSelect = document.getElementById('regBlock');
+    const serverSelect = document.getElementById('regServer');
+    if (!blockSelect || !serverSelect) return;
+
+    blockSelect.addEventListener('change', () => {
+        populateServerSelect(serverSelect, blockSelect.value, 'Selecione o Servidor');
+    });
+}
+
+function populateServerSelect(select, block, placeholder = null) {
+    if (!select) return;
+    const servers = SERVER_OPTIONS_BY_BLOCK[block] || [];
+    select.innerHTML = '';
+    if (placeholder) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = placeholder;
+        option.disabled = true;
+        option.selected = true;
+        select.appendChild(option);
+    }
+    servers.forEach(server => {
+        const option = document.createElement('option');
+        option.value = server;
+        option.textContent = server;
+        select.appendChild(option);
+    });
+}
+
 window.performLogin = async function () {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value.trim();
@@ -295,14 +478,33 @@ window.performRegister = async function () {
     const password = document.getElementById('regPassword').value.trim();
     const nickname = document.getElementById('regNickname').value.trim();
     const block = document.getElementById('regBlock').value;
-    const server = document.getElementById('regServer').value.trim();
+    const server = normalizeServerName(document.getElementById('regServer').value);
 
     if (!email || !password || !nickname || !block || !server) { alert('Por favor, preencha todos os campos.'); return; }
+    if (!isValidServerName(server)) {
+        alert('Selecione um servidor válido.');
+        return;
+    }
+    if (inferBlockFromServer(server) !== block) {
+        alert('O servidor selecionado não pertence ao bloco escolhido.');
+        return;
+    }
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await setDoc(doc(db, "users", userCredential.user.uid), {
-            email, nickname, block, server, role: 'user', createdAt: Date.now()
-        });
+        const pendingUser = {
+            uid: userCredential.user.uid,
+            email,
+            nickname,
+            block,
+            server,
+            role: 'user',
+            status: 'pending',
+            createdAt: Date.now()
+        };
+        await setDoc(doc(db, "users", userCredential.user.uid), pendingUser);
+        await setDoc(doc(db, "pendingApprovals", userCredential.user.uid), pendingUser);
+        alert('Cadastro enviado! Aguarde aprovação de um Staff.');
+        await signOut(auth);
     } catch (error) { alert('Erro ao cadastrar: ' + error.message); }
 };
 
@@ -315,6 +517,7 @@ window.switchMainTab = function (tabName) {
     document.getElementById('tabTimers').classList.remove('active');
     document.getElementById('tabSchedule').classList.remove('active');
     document.getElementById('tabPresence').classList.remove('active');
+    document.getElementById('tabApprovals').classList.remove('active');
     document.getElementById('tabRanking').classList.remove('active');
 
     document.getElementById('floorNav').style.display = 'none';
@@ -322,6 +525,7 @@ window.switchMainTab = function (tabName) {
     document.getElementById('mainGrid').style.display = 'none';
     document.getElementById('scheduleContainer').style.display = 'none';
     document.getElementById('presenceContainer').style.display = 'none';
+    document.getElementById('approvalsContainer').style.display = 'none';
     document.getElementById('rankingContainer').style.display = 'none';
 
     if (tabName === 'timers') {
@@ -335,6 +539,10 @@ window.switchMainTab = function (tabName) {
     } else if (tabName === 'presence') {
         document.getElementById('tabPresence').classList.add('active');
         document.getElementById('presenceContainer').style.display = 'block';
+    } else if (tabName === 'approvals') {
+        document.getElementById('tabApprovals').classList.add('active');
+        document.getElementById('approvalsContainer').style.display = 'block';
+        window.loadPendingApprovals();
     } else if (tabName === 'ranking') {
         document.getElementById('tabRanking').classList.add('active');
         document.getElementById('rankingContainer').style.display = 'block';
@@ -354,12 +562,15 @@ window.changeFloor = function (floor) {
     refreshTimerDisplay();
     updateActiveTimers();
     renderLogs();
+    renderClaims();
 };
 
 window.registerKill = async function (bossId, cooldownMinutes) {
     if (!currentUser || !currentServerView) return;
     const now = new Date();
-    const respawnTime = new Date(now.getTime() + cooldownMinutes * 60 * 1000);
+    const respawnTime = bossId === 'lider3'
+        ? getNextLeader3Respawn(now)
+        : new Date(now.getTime() + cooldownMinutes * 60 * 1000);
 
     if (!timersData[currentFloor]) timersData[currentFloor] = {};
     timersData[currentFloor][bossId] = {
@@ -376,10 +587,138 @@ window.registerKill = async function (bossId, cooldownMinutes) {
     } catch (error) { console.error("Erro ao salvar timer:", error); }
 };
 
+window.claimTarget = async function (targetId, ticketAmount = 1) {
+    if (!currentUser || !currentServerView) return;
+    const meta = claimMeta[targetId];
+    if (!meta) return;
+
+    ticketAmount = Math.max(1, Math.min(3, Number(ticketAmount) || 1));
+    const now = Date.now();
+    const claimsDoc = doc(db, "servers", currentServerView, "data", "claims");
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const snap = await transaction.get(claimsDoc);
+            const data = snap.exists() ? snap.data() : {};
+            if (!data[currentFloor]) data[currentFloor] = {};
+            let entries = Array.isArray(data[currentFloor][targetId]) ? [...data[currentFloor][targetId]] : [];
+            entries = normalizeClaimEntries(entries, meta, now);
+
+            if (!currentUser.isMaster) {
+                if (meta.type === 'single-ticket') {
+                    const currentEntry = entries[0];
+                    const lastClaim = currentEntry?.uid === currentUser.uid
+                        ? currentEntry.lastClaimedAt || currentEntry.claimedAt || 0
+                        : 0;
+
+                    if (currentEntry && currentEntry.uid !== currentUser.uid) {
+                        throw new Error(`${meta.label} já está clamado. Aguarde o jogador atual finalizar.`);
+                    }
+                    if (currentEntry && (currentEntry.ticketCount || 1) + ticketAmount > meta.perUserMax) {
+                        throw new Error(`Você já tem ${meta.perUserMax} tickets em ${meta.label}.`);
+                    }
+                    if (lastClaim && now - lastClaim < meta.repeatDelayMs) {
+                        const waitMs = meta.repeatDelayMs - (now - lastClaim);
+                        throw new Error(`Aguarde ${formatDuration(waitMs)} para clamar ${meta.label} novamente.`);
+                    }
+                } else {
+                    const userEntries = entries.filter(entry => entry.uid === currentUser.uid);
+                    const hasOtherPlayers = entries.some(entry => entry.uid !== currentUser.uid);
+                    const lastClaim = userEntries.reduce((last, entry) => Math.max(last, entry.lastClaimedAt || entry.claimedAt || 0), 0);
+
+                    if (userEntries.length === 0 && entries.length >= meta.maxSlots) {
+                        throw new Error(`A fila de ${meta.label} já está cheia (${meta.maxSlots}/3).`);
+                    }
+                    if (userEntries.some(entry => (entry.ticketCount || 1) + ticketAmount > meta.perUserMax)) {
+                        throw new Error(`Você já tem ${meta.perUserMax} tickets em ${meta.label}.`);
+                    }
+                    if (userEntries.length > 0 && hasOtherPlayers) {
+                        throw new Error(`Você já está clamado em ${meta.label}. Com fila ativa, aguarde sua vez antes de clamar mais tickets.`);
+                    }
+                    if (lastClaim && now - lastClaim < meta.repeatDelayMs) {
+                        const waitMs = meta.repeatDelayMs - (now - lastClaim);
+                        throw new Error(`Aguarde ${formatDuration(waitMs)} para clamar ${meta.label} novamente.`);
+                    }
+                }
+            }
+
+            const existingIndex = meta.type === 'queue' || meta.type === 'single-ticket'
+                ? entries.findIndex(entry => entry.uid === currentUser.uid)
+                : -1;
+
+            if (existingIndex >= 0) {
+                const currentEntry = entries[existingIndex];
+                const nextTicketCount = (currentEntry.ticketCount || 1) + ticketAmount;
+                if (meta.perUserMax && nextTicketCount > meta.perUserMax) {
+                    throw new Error(`Você já tem ${meta.perUserMax} tickets em ${meta.label}.`);
+                }
+                const baseUntil = Math.max(currentEntry.activeUntil || now, now);
+                entries[existingIndex] = {
+                    ...currentEntry,
+                    ticketCount: nextTicketCount,
+                    lastClaimedAt: now,
+                    activeUntil: existingIndex === 0 ? baseUntil + CLAIM_DURATION_MS * ticketAmount : currentEntry.activeUntil
+                };
+            } else {
+                if (meta.type === 'single-ticket' && entries.length > 0) {
+                    throw new Error(`${meta.label} já está clamado. Aguarde o jogador atual finalizar.`);
+                }
+                entries.push({
+                    uid: currentUser.uid,
+                    nickname: currentUser.nickname,
+                    claimedAt: now,
+                    lastClaimedAt: now,
+                    ticketCount: ticketAmount,
+                    activeFrom: entries.length === 0 ? now : null,
+                    activeUntil: entries.length === 0 ? now + CLAIM_DURATION_MS * ticketAmount : null,
+                    role: currentUser.role || 'user'
+                });
+            }
+            data[currentFloor][targetId] = entries;
+            transaction.set(claimsDoc, data, { merge: true });
+        });
+        await logActivity('clamou', meta.label);
+    } catch (error) {
+        alert(error.message || 'Erro ao clamar.');
+    }
+};
+
+window.finishClaim = async function (targetId) {
+    if (!currentUser || !currentServerView) return;
+    const meta = claimMeta[targetId];
+    if (!meta) return;
+
+    const claimsDoc = doc(db, "servers", currentServerView, "data", "claims");
+    try {
+        await runTransaction(db, async (transaction) => {
+            const snap = await transaction.get(claimsDoc);
+            const data = snap.exists() ? snap.data() : {};
+            let entries = Array.isArray(data[currentFloor]?.[targetId]) ? [...data[currentFloor][targetId]] : [];
+            entries = normalizeClaimEntries(entries, meta, Date.now());
+            const removeIndex = currentUser.isMaster
+                ? 0
+                : entries.findIndex(entry => entry.uid === currentUser.uid);
+
+            if (removeIndex < 0) {
+                throw new Error(`Você não tem claim ativo em ${meta.label}.`);
+            }
+
+            entries.splice(removeIndex, 1);
+            entries = promoteNextClaim(entries, Date.now());
+            if (!data[currentFloor]) data[currentFloor] = {};
+            data[currentFloor][targetId] = entries;
+            transaction.set(claimsDoc, data, { merge: true });
+        });
+        await logActivity('finalizou claim de', meta.label);
+    } catch (error) {
+        alert(error.message || 'Erro ao finalizar claim.');
+    }
+};
+
 // CORRIGIDO: clearAllTimers agora verifica se o usuário tem permissão (lider ou MASTER)
 window.clearAllTimers = async function () {
     if (!currentUser) return;
-    if (currentUser.role !== 'MASTER' && currentUser.role !== 'lider') {
+    if (!currentUser.isMaster && currentUser.role !== 'lider') {
         alert('Apenas líderes e administradores podem limpar todos os timers.');
         return;
     }
@@ -399,12 +738,11 @@ window.clearLogView = function () {
 };
 
 window.promptMasterServer = function () {
-    if (currentUser && currentUser.role === 'MASTER') {
+    if (currentUser && currentUser.isMaster) {
         const targetServer = prompt("Modo MASTER Ativado. Digite o Servidor:", currentServerView);
         if (targetServer && targetServer.trim() !== "") {
-            currentServerView = targetServer.trim();
-            updateHeader();
-            listenToServerData();
+            const normalizedServer = normalizeServerName(targetServer);
+            window.changeStaffServer(normalizedServer);
         }
     }
 };
@@ -413,6 +751,56 @@ window.promptMasterServer = function () {
 // HELPER FUNCTIONS
 // ============================================
 function updateClock() { document.getElementById('mainClock').textContent = formatTime(new Date()); }
+
+function normalizeRole(role) {
+    return String(role || '').trim().toUpperCase();
+}
+
+function normalizeStatus(status) {
+    return String(status || 'approved').trim().toLowerCase();
+}
+
+function normalizeServerName(server) {
+    return String(server || '').trim().toUpperCase();
+}
+
+function isValidServerName(server) {
+    const normalizedServer = normalizeServerName(server);
+    return Object.values(SERVER_OPTIONS_BY_BLOCK).some(servers => servers.includes(normalizedServer));
+}
+
+function compareServerNames(a, b) {
+    const parse = (server) => {
+        const normalizedServer = normalizeServerName(server);
+        const block = inferBlockFromServer(normalizedServer) || normalizedServer;
+        const match = normalizedServer.match(/(\d+)$/);
+        return match ? { block, number: Number(match[1]) } : { block, number: 0 };
+    };
+    const left = parse(a);
+    const right = parse(b);
+    return left.block.localeCompare(right.block) || left.number - right.number;
+}
+
+function compareBlockNames(a, b) {
+    const order = ['SA', 'NA', 'EU', 'INMENA', 'ASIA'];
+    return order.indexOf(a) - order.indexOf(b);
+}
+
+function groupServersByBlock(servers) {
+    return servers.reduce((groups, server) => {
+        const normalizedServer = normalizeServerName(server);
+        const block = inferBlockFromServer(normalizedServer);
+        if (!block || !isValidServerName(normalizedServer)) return groups;
+        if (!groups[block]) groups[block] = [];
+        if (!groups[block].includes(normalizedServer)) groups[block].push(normalizedServer);
+        return groups;
+    }, {});
+}
+
+function isMasterUser(userData) {
+    const role = normalizeRole(userData?.role);
+    return role === 'MASTER' || role === 'STAFF' || role === 'ADMIN';
+}
 
 function formatTime(date) {
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
@@ -424,6 +812,149 @@ function formatDateTime(date) {
     const d = String(date.getDate()).padStart(2, '0');
     const mo = String(date.getMonth() + 1).padStart(2, '0');
     return `${d}/${mo} ${formatTime(date)}`;
+}
+
+function formatDuration(ms) {
+    const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    if (mins <= 0) return `${secs}s`;
+    return `${mins}m ${String(secs).padStart(2, '0')}s`;
+}
+
+function formatCountdown(ms) {
+    const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function inferBlockFromServer(server) {
+    const normalizedServer = normalizeServerName(server);
+    for (const [block, servers] of Object.entries(SERVER_OPTIONS_BY_BLOCK)) {
+        if (servers.includes(normalizedServer)) return block;
+    }
+    return null;
+}
+
+function getBlockTimeZone() {
+    const block = inferBlockFromServer(currentServerView) || currentUser?.block || 'SA';
+    return BLOCK_TIME_ZONES[block] || BLOCK_TIME_ZONES.SA;
+}
+
+function getZonedParts(date, timeZone) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).formatToParts(date);
+    return Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+}
+
+function zonedTimeToDate(parts, timeZone) {
+    const guess = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute || 0, parts.second || 0));
+    const actual = getZonedParts(guess, timeZone);
+    const wantedAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute || 0, parts.second || 0);
+    const actualAsUtc = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute || 0, actual.second || 0);
+    return new Date(guess.getTime() + (wantedAsUtc - actualAsUtc));
+}
+
+function getNextLeader3Respawn(now) {
+    const timeZone = getBlockTimeZone();
+    const zonedNow = getZonedParts(now, timeZone);
+    const today = { year: zonedNow.year, month: zonedNow.month, day: zonedNow.day };
+
+    for (const hour of LEADER3_SPAWN_HOURS) {
+        const candidate = zonedTimeToDate({ ...today, hour, minute: 0, second: 0 }, timeZone);
+        if (candidate.getTime() > now.getTime()) return candidate;
+    }
+
+    const tomorrowAtNoon = zonedTimeToDate({ ...today, hour: 12, minute: 0, second: 0 }, timeZone);
+    tomorrowAtNoon.setUTCDate(tomorrowAtNoon.getUTCDate() + 1);
+    const tomorrow = getZonedParts(tomorrowAtNoon, timeZone);
+    return zonedTimeToDate({
+        year: tomorrow.year,
+        month: tomorrow.month,
+        day: tomorrow.day,
+        hour: LEADER3_SPAWN_HOURS[0],
+        minute: 0,
+        second: 0
+    }, timeZone);
+}
+
+function promoteNextClaim(entries, now) {
+    if (entries.length === 0) return entries;
+    const [current, ...rest] = entries;
+    if (!current.activeUntil || current.activeUntil <= now) {
+        const ticketCount = current.ticketCount || 1;
+        return [{
+            ...current,
+            ticketCount,
+            activeFrom: now,
+            activeUntil: now + CLAIM_DURATION_MS * ticketCount
+        }, ...rest];
+    }
+    return entries;
+}
+
+function normalizeClaimEntries(entries, meta, now) {
+    const withClaimDuration = (entry) => {
+        const activeFrom = entry.activeFrom || entry.claimedAt || now;
+        const ticketCount = Math.min(entry.ticketCount || 1, meta.perUserMax || entry.ticketCount || 1);
+        return {
+            ...entry,
+            ticketCount,
+            activeFrom,
+            activeUntil: entry.activeUntil || activeFrom + CLAIM_DURATION_MS * ticketCount,
+            lastClaimedAt: entry.lastClaimedAt || entry.claimedAt || activeFrom
+        };
+    };
+
+    const compacted = [];
+    entries.filter(Boolean).forEach((entry) => {
+        const normalizedEntry = withClaimDuration(entry);
+        const existing = compacted.find(item => item.uid === normalizedEntry.uid);
+        if (!existing) {
+            compacted.push(normalizedEntry);
+            return;
+        }
+
+        const maxTickets = meta.perUserMax || Infinity;
+        existing.ticketCount = Math.min(maxTickets, (existing.ticketCount || 1) + (normalizedEntry.ticketCount || 1));
+        existing.claimedAt = Math.min(existing.claimedAt || normalizedEntry.claimedAt || now, normalizedEntry.claimedAt || now);
+        existing.lastClaimedAt = Math.max(existing.lastClaimedAt || 0, normalizedEntry.lastClaimedAt || normalizedEntry.claimedAt || 0);
+        existing.activeFrom = Math.min(existing.activeFrom || normalizedEntry.activeFrom || now, normalizedEntry.activeFrom || now);
+        existing.activeUntil = existing.activeUntil || normalizedEntry.activeUntil;
+    });
+
+    if (meta.type !== 'queue') {
+        return compacted
+            .slice(0, 1)
+            .map(entry => ({
+                ...entry,
+                activeUntil: (entry.activeFrom || now) + CLAIM_DURATION_MS * (entry.ticketCount || 1)
+            }))
+            .filter(entry => entry.activeUntil > now);
+    }
+
+    let normalized = compacted.slice(0, meta.maxSlots || compacted.length);
+    if (normalized.length > 0) {
+        normalized[0] = {
+            ...normalized[0],
+            activeUntil: (normalized[0].activeFrom || now) + CLAIM_DURATION_MS * (normalized[0].ticketCount || 1)
+        };
+    }
+    while (normalized.length > 0 && normalized[0].activeUntil <= now) {
+        normalized.shift();
+        if (normalized.length > 0) normalized = promoteNextClaim(normalized, now);
+    }
+    return normalized;
 }
 
 async function saveSchedule() {
@@ -468,8 +999,74 @@ function renderLogs() {
     container.innerHTML = html;
 }
 
+function renderClaims() {
+    const floorClaims = claimsData[currentFloor] || {};
+    const now = Date.now();
+
+    Object.keys(claimMeta).forEach(targetId => {
+        const listEl = document.getElementById(`${targetId}-claim-list`);
+        const statusEl = document.getElementById(`${targetId}-claim-status`);
+        const countEl = document.getElementById(`${targetId}-claim-count`);
+        const meta = claimMeta[targetId];
+        const entries = normalizeClaimEntries(
+            Array.isArray(floorClaims[targetId]) ? [...floorClaims[targetId]] : [],
+            meta,
+            now
+        );
+        const activeRemaining = entries[0]?.activeUntil ? formatCountdown(entries[0].activeUntil - now) : null;
+        const cardTimerEl = document.getElementById(`${targetId}-nasceu`);
+        const spawnTimer = timersData[currentFloor]?.[targetId];
+        const hasActiveSpawnTimer = spawnTimer && spawnTimer.respawnAt > now;
+
+        if (cardTimerEl?.classList.contains('magic-timer') && !hasActiveSpawnTimer) {
+            cardTimerEl.textContent = activeRemaining || '--:--:--';
+            cardTimerEl.classList.toggle('timer-ready', !activeRemaining);
+        }
+
+        if (countEl) {
+            if (meta.type === 'queue') {
+                countEl.textContent = `${entries[0]?.ticketCount || 0}/${meta.perUserMax || meta.maxSlots}`;
+            } else if (meta.perUserMax) {
+                countEl.textContent = `${entries[0]?.ticketCount || 0}/${meta.perUserMax}`;
+            } else {
+                countEl.textContent = entries.length > 0 ? 'Ocupado' : 'Livre';
+            }
+        }
+
+        if (statusEl) {
+            if (entries.length === 0) {
+                statusEl.textContent = meta.type === 'queue' ? 'Fila livre' : 'Aguardando claim';
+                statusEl.className = 'claim-status claim-free';
+            } else {
+                statusEl.textContent = meta.type === 'queue'
+                    ? `Atual: ${entries[0].nickname} ${activeRemaining ? `(${activeRemaining})` : ''}`
+                    : `Clamado por ${entries[0].nickname} ${activeRemaining ? `(${activeRemaining})` : ''}`;
+                statusEl.className = 'claim-status claim-busy';
+            }
+        }
+
+        if (listEl) {
+            if (entries.length === 0) {
+                listEl.innerHTML = '<div class="claim-empty">Sem jogadores.</div>';
+            } else {
+                listEl.innerHTML = entries.map((entry, index) => {
+                    const position = meta.type === 'queue' ? `${index + 1}.` : '';
+                    const tag = index === 0
+                        ? `<span class="claim-tag">${entry.activeUntil ? formatCountdown(entry.activeUntil - now) : 'ATUAL'}</span>`
+                        : '<span class="claim-tag waiting">FILA</span>';
+                    const tickets = entry.ticketCount ? ` <small>${entry.ticketCount}x</small>` : '';
+                    return `<div class="claim-row"><span>${position} ${entry.nickname}${tickets}</span>${tag}</div>`;
+                }).join('');
+            }
+        }
+    });
+}
+
 function refreshTimerDisplay() {
-    document.querySelectorAll('[id$="-morreu"], [id$="-nasceu"]').forEach(el => el.textContent = '--:--:--');
+    document.querySelectorAll('[id$="-morreu"], [id$="-nasceu"]').forEach(el => {
+        el.textContent = '--:--:--';
+        el.classList.remove('timer-ready');
+    });
     const floorTimers = timersData[currentFloor] || {};
     for (const [bossId, timer] of Object.entries(floorTimers)) {
         const m = document.getElementById(`${bossId}-morreu`);
@@ -496,6 +1093,11 @@ function updateActiveTimers() {
         const remaining = timer.respawnAt - now;
         const meta = timerMeta[id];
         const liveEl = document.getElementById(`${id}-live`);
+        const cardTimerEl = document.getElementById(`${id}-nasceu`);
+        const shouldShowCountdown = cardTimerEl && (
+            cardTimerEl.classList.contains('magic-timer') ||
+            cardTimerEl.classList.contains('leader-timer')
+        );
 
         if (!meta) continue;
 
@@ -503,11 +1105,20 @@ function updateActiveTimers() {
             const mins = Math.floor(remaining / 60000);
             const secs = Math.floor((remaining % 60000) / 1000);
             const timeString = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            const cardTimeString = formatCountdown(remaining);
             chips.push(`<div class="active-timer-chip ${meta.chipClass}"><span>${meta.label}</span> <strong>${timeString}</strong></div>`);
             if (liveEl) { liveEl.textContent = timeString; liveEl.className = 'live-countdown active'; }
+            if (shouldShowCountdown) {
+                cardTimerEl.textContent = cardTimeString;
+                cardTimerEl.classList.remove('timer-ready');
+            }
         } else {
             chips.push(`<div class="active-timer-chip ${meta.chipClass} soon"><span>${meta.label}</span> <strong>NASCEU!</strong></div>`);
             if (liveEl) { liveEl.textContent = 'NASCEU!'; liveEl.className = 'live-countdown ready'; }
+            if (shouldShowCountdown) {
+                cardTimerEl.textContent = 'NASCEU!';
+                cardTimerEl.classList.add('timer-ready');
+            }
         }
     }
 
@@ -553,6 +1164,190 @@ window.exportTimers = function () {
     }
     navigator.clipboard.writeText(text).then(() => alert('Copiado!'));
 };
+
+window.loadPendingApprovals = async function () {
+    if (!currentUser || !currentUser.isMaster) return;
+    const tbody = document.getElementById('approvalsBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
+
+    try {
+        const pendingMap = new Map();
+        try {
+            const approvalsSnapshot = await getDocs(collection(db, "pendingApprovals"));
+            approvalsSnapshot.forEach(userDoc => {
+                pendingMap.set(userDoc.id, { id: userDoc.id, ...userDoc.data() });
+            });
+        } catch (error) {
+            console.warn('Não foi possível ler pendingApprovals, usando users como fallback:', error);
+        }
+
+        let usersSnapshot = null;
+        try {
+            usersSnapshot = await getDocs(collection(db, "users"));
+            usersSnapshot.forEach(userDoc => {
+                const user = { id: userDoc.id, ...userDoc.data() };
+                if (normalizeStatus(user.status) === 'pending') {
+                    pendingMap.set(userDoc.id, user);
+                }
+            });
+        } catch (error) {
+            console.warn('Não foi possível ler users para aprovações:', error);
+        }
+
+        const pendingUsers = Array.from(pendingMap.values());
+        if (pendingUsers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5">Nenhum cadastro pendente.</td></tr>';
+            await window.loadUsersManagement(usersSnapshot);
+            return;
+        }
+
+        tbody.innerHTML = '';
+        pendingUsers
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+            .forEach(user => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${user.nickname || '-'}</td>
+                <td>${user.email || '-'}</td>
+                <td>${user.block || '-'}</td>
+                <td>${user.server || '-'}</td>
+                <td>
+                    <div class="approval-actions">
+                        <button class="btn btn-green" onclick="approveUser('${user.id}')">Aprovar</button>
+                        <button class="btn btn-danger" onclick="rejectUser('${user.id}')">Rejeitar</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        await window.loadUsersManagement(usersSnapshot);
+    } catch (error) {
+        console.error('Erro ao carregar aprovações:', error);
+        tbody.innerHTML = '<tr><td colspan="5">Erro ao carregar cadastros pendentes.</td></tr>';
+        await window.loadUsersManagement();
+    }
+};
+
+window.approveUser = async function (uid) {
+    if (!currentUser || !currentUser.isMaster) return;
+    try {
+        await setDoc(doc(db, "users", uid), {
+            status: 'approved',
+            approvedBy: currentUser.uid,
+            approvedAt: Date.now()
+        }, { merge: true });
+        await deleteDoc(doc(db, "pendingApprovals", uid));
+        await window.loadPendingApprovals();
+    } catch (error) {
+        alert('Erro ao aprovar usuário: ' + error.message);
+    }
+};
+
+window.rejectUser = async function (uid) {
+    if (!currentUser || !currentUser.isMaster) return;
+    if (!confirm('Rejeitar este cadastro?')) return;
+    try {
+        await setDoc(doc(db, "users", uid), {
+            status: 'rejected',
+            rejectedBy: currentUser.uid,
+            rejectedAt: Date.now()
+        }, { merge: true });
+        await deleteDoc(doc(db, "pendingApprovals", uid));
+        await window.loadPendingApprovals();
+    } catch (error) {
+        alert('Erro ao rejeitar usuário: ' + error.message);
+    }
+};
+
+window.loadUsersManagement = async function (existingSnapshot = null) {
+    if (!currentUser || !currentUser.isMaster) return;
+    const tbody = document.getElementById('usersManagementBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
+
+    try {
+        const snapshot = existingSnapshot || await getDocs(collection(db, "users"));
+        const users = [];
+        snapshot.forEach(userDoc => users.push({ id: userDoc.id, ...userDoc.data() }));
+
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5">Nenhum usuário encontrado.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        users
+            .sort((a, b) => (a.nickname || '').localeCompare(b.nickname || ''))
+            .forEach(user => {
+                const status = normalizeStatus(user.status);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${user.nickname || '-'}</td>
+                    <td>${user.email || '-'}</td>
+                    <td>${user.server || '-'}</td>
+                    <td>${status}</td>
+                    <td>
+                        <div class="approval-actions">
+                            <button class="btn btn-secondary" onclick="promptChangeUserNickname('${user.id}', '${escapeForSingleQuote(user.nickname || '')}')">Nick</button>
+                            ${status === 'disabled'
+                                ? `<button class="btn btn-green" onclick="setUserAccountStatus('${user.id}', 'approved')">Ativar</button>`
+                                : `<button class="btn btn-danger" onclick="setUserAccountStatus('${user.id}', 'disabled')">Desativar</button>`}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+    } catch (error) {
+        console.error('Erro ao carregar usuários:', error);
+        tbody.innerHTML = '<tr><td colspan="5">Erro ao carregar usuários.</td></tr>';
+    }
+};
+
+window.promptChangeUserNickname = async function (uid, currentNickname) {
+    if (!currentUser || !currentUser.isMaster) return;
+    const nickname = prompt('Novo nickname:', currentNickname || '');
+    if (!nickname || !nickname.trim()) return;
+
+    try {
+        await setDoc(doc(db, "users", uid), {
+            nickname: nickname.trim(),
+            nicknameUpdatedBy: currentUser.uid,
+            nicknameUpdatedAt: Date.now()
+        }, { merge: true });
+        await window.loadPendingApprovals();
+    } catch (error) {
+        alert('Erro ao trocar nick: ' + error.message);
+    }
+};
+
+window.setUserAccountStatus = async function (uid, status) {
+    if (!currentUser || !currentUser.isMaster) return;
+    if (uid === currentUser.uid && status === 'disabled') {
+        alert('Você não pode desativar a própria conta.');
+        return;
+    }
+    const action = status === 'disabled' ? 'desativar' : 'ativar';
+    if (!confirm(`Deseja ${action} esta conta?`)) return;
+
+    try {
+        await setDoc(doc(db, "users", uid), {
+            status,
+            statusUpdatedBy: currentUser.uid,
+            statusUpdatedAt: Date.now()
+        }, { merge: true });
+        if (status !== 'pending') {
+            await deleteDoc(doc(db, "pendingApprovals", uid));
+        }
+        await window.loadPendingApprovals();
+    } catch (error) {
+        alert('Erro ao alterar status: ' + error.message);
+    }
+};
+
+function escapeForSingleQuote(value) {
+    return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
 
 // ============================================
 // PRESENCE & RANKING MODULE
