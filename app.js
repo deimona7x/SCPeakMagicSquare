@@ -1247,7 +1247,12 @@ window.registerKill = async function (bossId, cooldownMinutes) {
 
     if (!timersData[currentFloor]) timersData[currentFloor] = {};
     timersData[currentFloor][bossId] = {
-        killedAt: now.getTime(), respawnAt: respawnTime.getTime(), cooldown: cooldownMinutes, notified: false
+        killedAt: now.getTime(),
+        respawnAt: respawnTime.getTime(),
+        cooldown: cooldownMinutes,
+        notified: false,
+        killedBy: currentUser.uid,
+        killedByName: currentUser.nickname
     };
 
     refreshTimerDisplay();
@@ -1266,6 +1271,7 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
     if (!meta) return;
 
     ticketAmount = Math.max(1, Math.min(3, Number(ticketAmount) || 1));
+    const hasUnlimitedClaimTickets = currentUser.isMaster;
     const now = Date.now();
     const claimsDoc = doc(db, "servers", currentServerView, "data", "claims");
 
@@ -1322,7 +1328,7 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
             if (existingIndex >= 0) {
                 const currentEntry = entries[existingIndex];
                 const nextTicketCount = (currentEntry.ticketCount || 1) + ticketAmount;
-                if (meta.perUserMax && nextTicketCount > meta.perUserMax) {
+                if (!hasUnlimitedClaimTickets && meta.perUserMax && nextTicketCount > meta.perUserMax) {
                     throw new Error(`Você já tem ${meta.perUserMax} tickets em ${meta.label}.`);
                 }
                 const baseUntil = Math.max(currentEntry.activeUntil || now, now);
@@ -1330,6 +1336,7 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
                     ...currentEntry,
                     ticketCount: nextTicketCount,
                     lastClaimedAt: now,
+                    role: currentUser.role || currentEntry.role || 'user',
                     activeUntil: existingIndex === 0 ? baseUntil + CLAIM_DURATION_MS * ticketAmount : currentEntry.activeUntil
                 };
             } else {
@@ -1535,6 +1542,15 @@ function normalizeSearchText(value) {
     return String(value || '').trim().toLowerCase();
 }
 
+function normalizeCharacterClassName(characterClass) {
+    const value = String(characterClass || '').trim();
+    const map = {
+        'Sinistro (Sinner)': 'Soturna (Darkist)',
+        'Besteiro (Arbalist/Crossbow)': 'Coração de Leão (Lionheart)'
+    };
+    return map[value] || value;
+}
+
 function updateClock() { document.getElementById('mainClock').textContent = formatTime(new Date()); }
 
 function normalizeRole(role) {
@@ -1622,6 +1638,10 @@ function isMasterUser(userData) {
 
 function isHierarchyMasterUser(userData) {
     return normalizeRole(userData?.role) === 'MASTER';
+}
+
+function hasUnlimitedClaimTickets(role) {
+    return ['MASTER', 'STAFF', 'ADMIN'].includes(normalizeRole(role));
 }
 
 function formatTime(date) {
@@ -1728,7 +1748,9 @@ function promoteNextClaim(entries, now) {
 function normalizeClaimEntries(entries, meta, now) {
     const withClaimDuration = (entry) => {
         const activeFrom = entry.activeFrom || entry.claimedAt || now;
-        const ticketCount = Math.min(entry.ticketCount || 1, meta.perUserMax || entry.ticketCount || 1);
+        const ticketCount = hasUnlimitedClaimTickets(entry.role)
+            ? entry.ticketCount || 1
+            : Math.min(entry.ticketCount || 1, meta.perUserMax || entry.ticketCount || 1);
         return {
             ...entry,
             ticketCount,
@@ -1747,7 +1769,7 @@ function normalizeClaimEntries(entries, meta, now) {
             return;
         }
 
-        const maxTickets = meta.perUserMax || Infinity;
+        const maxTickets = hasUnlimitedClaimTickets(existing.role) ? Infinity : meta.perUserMax || Infinity;
         existing.ticketCount = Math.min(maxTickets, (existing.ticketCount || 1) + (normalizedEntry.ticketCount || 1));
         existing.claimedAt = Math.min(existing.claimedAt || normalizedEntry.claimedAt || now, normalizedEntry.claimedAt || now);
         existing.lastClaimedAt = Math.max(existing.lastClaimedAt || 0, normalizedEntry.lastClaimedAt || normalizedEntry.claimedAt || 0);
@@ -1847,10 +1869,16 @@ function renderClaims() {
         }
 
         if (countEl) {
+            const activeTicketCount = entries[0]?.ticketCount || 0;
+            const activeHasUnlimitedTickets = hasUnlimitedClaimTickets(entries[0]?.role);
             if (meta.type === 'queue') {
-                countEl.textContent = `${entries[0]?.ticketCount || 0}/${meta.perUserMax || meta.maxSlots}`;
+                countEl.textContent = activeHasUnlimitedTickets
+                    ? `${activeTicketCount} tickets`
+                    : `${activeTicketCount}/${meta.perUserMax || meta.maxSlots}`;
             } else if (meta.perUserMax) {
-                countEl.textContent = `${entries[0]?.ticketCount || 0}/${meta.perUserMax}`;
+                countEl.textContent = activeHasUnlimitedTickets
+                    ? `${activeTicketCount} tickets`
+                    : `${activeTicketCount}/${meta.perUserMax}`;
             } else {
                 countEl.textContent = entries.length > 0 ? 'Ocupado' : 'Livre';
             }
@@ -1882,6 +1910,28 @@ function renderClaims() {
                 }).join('');
             }
         }
+
+        if (targetId === 'praca-magica') {
+            updatePracaLeaderClaimHighlight(entries[0] || null, activeRemaining);
+        }
+    });
+}
+
+function updatePracaLeaderClaimHighlight(activeEntry, activeRemaining) {
+    document.querySelectorAll('.leader-compact').forEach(card => {
+        card.classList.toggle('leader-claimed', Boolean(activeEntry));
+        let badge = card.querySelector('.leader-claimer');
+        if (!activeEntry) {
+            if (badge) badge.remove();
+            return;
+        }
+        if (!badge) {
+            badge = document.createElement('div');
+            badge.className = 'leader-claimer';
+            card.insertBefore(badge, card.querySelector('.leader-subtitle'));
+        }
+        const timerText = activeRemaining ? ` · ${activeRemaining}` : '';
+        badge.textContent = `Praça claimada por ${activeEntry.nickname}${timerText}`;
     });
 }
 
@@ -1896,7 +1946,12 @@ function refreshTimerDisplay() {
         const n = document.getElementById(`${bossId}-nasceu`);
         if (m) m.textContent = formatTimeFromMs(timer.killedAt);
         if (n) n.textContent = formatTimeFromMs(timer.respawnAt);
+        renderLeaderKillInfo(bossId, timer);
     }
+    ['lider1', 'lider2', 'lider3'].forEach(leaderId => {
+        if (!floorTimers[leaderId]) renderLeaderKillInfo(leaderId, null);
+    });
+    renderLeader3FixedCooldown(Date.now(), floorTimers.lider3 || null);
 }
 
 function updateActiveTimers() {
@@ -1913,7 +1968,9 @@ function updateActiveTimers() {
     });
 
     for (const [id, timer] of Object.entries(floorTimers)) {
-        const remaining = timer.respawnAt - now;
+        const leader3FixedRespawn = id === 'lider3' ? getNextLeader3Respawn(new Date(now)).getTime() : null;
+        const effectiveRespawnAt = id === 'lider3' && timer.respawnAt <= now ? leader3FixedRespawn : timer.respawnAt;
+        const remaining = effectiveRespawnAt - now;
         const meta = timerMeta[id];
         const liveEl = document.getElementById(`${id}-live`);
         const cardTimerEl = document.getElementById(`${id}-nasceu`);
@@ -1943,11 +2000,53 @@ function updateActiveTimers() {
                 cardTimerEl.classList.add('timer-ready');
             }
         }
+        renderLeaderKillInfo(id, timer);
     }
+    ['lider1', 'lider2', 'lider3'].forEach(leaderId => {
+        if (!floorTimers[leaderId]) renderLeaderKillInfo(leaderId, null);
+    });
+
+    renderLeader3FixedCooldown(now, floorTimers.lider3 || null);
 
     container.innerHTML = chips.length === 0
         ? '<span style="color:var(--text-muted); font-size:0.8rem;">Nenhum timer ativo.</span>'
         : chips.join('');
+}
+
+function renderLeader3FixedCooldown(now = Date.now(), timer = null) {
+    const leader3Timer = document.getElementById('lider3-nasceu');
+    if (!leader3Timer) return;
+
+    const effectiveRespawnAt = timer?.respawnAt && timer.respawnAt > now
+        ? timer.respawnAt
+        : getNextLeader3Respawn(new Date(now)).getTime();
+    leader3Timer.textContent = formatCountdown(effectiveRespawnAt - now);
+    leader3Timer.classList.remove('timer-ready');
+}
+
+function renderLeaderKillInfo(bossId, timer) {
+    if (!['lider1', 'lider2', 'lider3'].includes(bossId)) return;
+
+    const timerEl = document.getElementById(`${bossId}-nasceu`);
+    const card = timerEl?.closest('.leader-compact');
+    if (!card) return;
+
+    let info = card.querySelector('.leader-kill-info');
+    if (!timer?.killedAt || !timer?.killedByName) {
+        if (info) info.remove();
+        return;
+    }
+
+    if (!info) {
+        info = document.createElement('div');
+        info.className = 'leader-kill-info';
+        card.insertBefore(info, timerEl);
+    }
+
+    info.innerHTML = `
+        <span>Matou: <strong>${escapeHtml(timer.killedByName)}</strong></span>
+        <span>${formatDateTime(new Date(timer.killedAt))}</span>
+    `;
 }
 
 async function checkAlerts() {
@@ -2116,7 +2215,8 @@ function renderUsersManagementRows() {
     const normalizedSearch = normalizeSearchText(searchTerm);
     const users = usersManagementCache.filter(user => {
         const matchesNickname = !normalizedSearch || normalizeSearchText(user.nickname).includes(normalizedSearch);
-        const matchesClass = !selectedClass || user.characterClass === selectedClass;
+        const userClass = normalizeCharacterClassName(user.characterClass);
+        const matchesClass = !selectedClass || userClass === selectedClass;
         return matchesNickname && matchesClass;
     });
 
@@ -2137,12 +2237,13 @@ function renderUsersManagementRows() {
         const requestStatus = normalizeStatus(nicknameRequest.status || '');
         const pendingNickname = requestStatus === 'pending' && nicknameRequest.nickname ? nicknameRequest.nickname : '';
         const role = normalizeRole(user.role || 'user');
+        const characterClass = normalizeCharacterClassName(user.characterClass);
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><button class="link-button" onclick="openServerAccessModal('${user.id}')">${user.nickname || '-'}</button></td>
             <td>${maskEmail(user.email)}</td>
             <td>${normalizeServerAlias(user.server) || '-'}</td>
-            <td>${user.characterClass || '-'}</td>
+            <td>${characterClass || '-'}</td>
             <td>${extraServers.length ? extraServers.join(', ') : '-'}</td>
             <td>${pendingNickname ? renderNicknameRequestActions(user.id, pendingNickname) : '-'}</td>
             <td>${formatUserRole(user.role)}</td>
@@ -2423,7 +2524,7 @@ function renderOwnProfile() {
 
     setInputValue('profileCurrentNickname', currentUser.nickname || '');
     setInputValue('profileEmail', maskEmail(currentUser.email));
-    setInputValue('profileClass', currentUser.characterClass || '');
+    setInputValue('profileClass', normalizeCharacterClassName(currentUser.characterClass));
     setInputValue('profilePower', currentUser.power || '');
     setInputValue('profileLevel', currentUser.level || '');
 
