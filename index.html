@@ -40,6 +40,18 @@
                     <input type="email" id="regEmail" placeholder="E-mail" required>
                     <input type="password" id="regPassword" placeholder="Senha" required>
                     <input type="text" id="regNickname" placeholder="Nickname (ex: MegaBoostPopozinho)" required>
+                    <select id="regClass" required>
+                        <option value="" disabled selected>Selecione sua Classe</option>
+                        <option value="Guerreiro (Warrior)">Guerreiro (Warrior)</option>
+                        <option value="Feiticeira (Sorcerer / Maga)">Feiticeira (Sorcerer / Maga)</option>
+                        <option value="Taoísta (Taoist)">Taoísta (Taoist)</option>
+                        <option value="Lanceiro (Lancer)">Lanceiro (Lancer)</option>
+                        <option value="Arbalista (Arbalist)">Arbalista (Arbalist)</option>
+                        <option value="Sinistro (Sinner)">Sinistro (Sinner)</option>
+                        <option value="Besteiro (Arbalist/Crossbow)">Besteiro (Arbalist/Crossbow)</option>
+                    </select>
+                    <input type="text" id="regPower" placeholder="Power (ex: 423.280 PP)" required>
+                    <input type="number" id="regLevel" placeholder="Level (ex: 150)" min="1" max="999" required>
                     <select id="regBlock" required>
                         <option value="" disabled selected>Selecione seu Bloco</option>
                         <option value="SA">SA (América do Sul)</option>
@@ -666,12 +678,13 @@
                                 <th>Classe</th>
                                 <th>Acessos Extras</th>
                                 <th>Pedido Nick</th>
+                                <th>Cargo</th>
                                 <th>Status</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="usersManagementBody">
-                            <tr><td colspan="8">Carregando...</td></tr>
+                            <tr><td colspan="9">Carregando...</td></tr>
                         </tbody>
                     </table>
                 </div>

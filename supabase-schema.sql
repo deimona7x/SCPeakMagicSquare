@@ -25,7 +25,9 @@ create table if not exists public.profiles (
     nickname_updated_at bigint,
     profile_updated_at bigint,
     extra_servers_updated_by uuid,
-    extra_servers_updated_at bigint
+    extra_servers_updated_at bigint,
+    role_updated_by uuid,
+    role_updated_at bigint
 );
 
 create table if not exists public.server_state (
@@ -84,6 +86,9 @@ begin
         nickname,
         block,
         server,
+        character_class,
+        power,
+        level,
         role,
         status,
         created_at
@@ -94,6 +99,9 @@ begin
         coalesce(new.raw_user_meta_data->>'nickname', split_part(new.email, '@', 1)),
         new.raw_user_meta_data->>'block',
         new.raw_user_meta_data->>'server',
+        new.raw_user_meta_data->>'characterClass',
+        new.raw_user_meta_data->>'power',
+        new.raw_user_meta_data->>'level',
         'user',
         'pending',
         (extract(epoch from now()) * 1000)::bigint

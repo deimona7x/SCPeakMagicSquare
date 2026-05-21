@@ -311,7 +311,9 @@ function toProfileRow(data) {
         nickname_updated_at: data.nicknameUpdatedAt,
         profile_updated_at: data.profileUpdatedAt,
         extra_servers_updated_by: data.extraServersUpdatedBy,
-        extra_servers_updated_at: data.extraServersUpdatedAt
+        extra_servers_updated_at: data.extraServersUpdatedAt,
+        role_updated_by: data.roleUpdatedBy,
+        role_updated_at: data.roleUpdatedAt
     });
 }
 
@@ -340,7 +342,9 @@ function fromProfileRow(row) {
         nicknameUpdatedAt: row.nickname_updated_at,
         profileUpdatedAt: row.profile_updated_at,
         extraServersUpdatedBy: row.extra_servers_updated_by,
-        extraServersUpdatedAt: row.extra_servers_updated_at
+        extraServersUpdatedAt: row.extra_servers_updated_at,
+        roleUpdatedBy: row.role_updated_by,
+        roleUpdatedAt: row.role_updated_at
     };
 }
 
@@ -676,7 +680,8 @@ onAuthStateChanged(auth, async (user) => {
                 nicknameChangeRequest: data.nicknameChangeRequest || null,
                 role: data.role || 'user',
                 status,
-                isMaster
+                isMaster,
+                isHierarchyMaster: isHierarchyMasterUser(data)
             };
             currentUser.allowedServers = buildAllowedServers(currentUser);
 
@@ -976,10 +981,13 @@ window.performRegister = async function () {
     const email = document.getElementById('regEmail').value.trim();
     const password = document.getElementById('regPassword').value.trim();
     const nickname = document.getElementById('regNickname').value.trim();
+    const characterClass = document.getElementById('regClass').value;
+    const power = document.getElementById('regPower').value.trim();
+    const level = document.getElementById('regLevel').value.trim();
     const block = document.getElementById('regBlock').value;
     const server = normalizeServerAlias(document.getElementById('regServer').value);
 
-    if (!email || !password || !nickname || !block || !server) { alert('Por favor, preencha todos os campos.'); return; }
+    if (!email || !password || !nickname || !characterClass || !power || !level || !block || !server) { alert('Por favor, preencha todos os campos.'); return; }
     if (!isValidServerName(server)) {
         alert('Selecione um servidor válido.');
         return;
@@ -989,7 +997,7 @@ window.performRegister = async function () {
         return;
     }
     try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password, { nickname, block, server });
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password, { nickname, block, server, characterClass, power, level });
         const userId = userCredential.user.id || userCredential.user.uid;
         const pendingUser = {
             uid: userId,
@@ -997,6 +1005,9 @@ window.performRegister = async function () {
             nickname,
             block,
             server,
+            characterClass,
+            power,
+            level,
             role: 'user',
             status: 'pending',
             createdAt: Date.now()
@@ -1456,6 +1467,10 @@ function groupServersByBlock(servers) {
 function isMasterUser(userData) {
     const role = normalizeRole(userData?.role);
     return role === 'MASTER' || role === 'STAFF' || role === 'ADMIN';
+}
+
+function isHierarchyMasterUser(userData) {
+    return normalizeRole(userData?.role) === 'MASTER';
 }
 
 function formatTime(date) {
@@ -1920,7 +1935,7 @@ window.loadUsersManagement = async function (existingSnapshot = null) {
     if (!currentUser || !currentUser.isMaster) return;
     const tbody = document.getElementById('usersManagementBody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8">Carregando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9">Carregando...</td></tr>';
 
     try {
         const snapshot = existingSnapshot || await getDocs(collection(db, "users"));
@@ -1931,7 +1946,7 @@ window.loadUsersManagement = async function (existingSnapshot = null) {
         renderUsersManagementRows();
     } catch (error) {
         console.error('Erro ao carregar usuários:', error);
-        tbody.innerHTML = '<tr><td colspan="8">Erro ao carregar usuários.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">Erro ao carregar usuários.</td></tr>';
     }
 };
 
@@ -1954,11 +1969,11 @@ function renderUsersManagementRows() {
     });
 
     if (usersManagementCache.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8">Nenhum usuário encontrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">Nenhum usuário encontrado.</td></tr>';
         return;
     }
     if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8">Nenhum jogador encontrado para essa busca.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">Nenhum jogador encontrado para essa busca.</td></tr>';
         return;
     }
 
@@ -1969,6 +1984,7 @@ function renderUsersManagementRows() {
         const nicknameRequest = user.nicknameChangeRequest || {};
         const requestStatus = normalizeStatus(nicknameRequest.status || '');
         const pendingNickname = requestStatus === 'pending' && nicknameRequest.nickname ? nicknameRequest.nickname : '';
+        const role = normalizeRole(user.role || 'user');
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><button class="link-button" onclick="openServerAccessModal('${user.id}')">${user.nickname || '-'}</button></td>
@@ -1977,11 +1993,13 @@ function renderUsersManagementRows() {
             <td>${user.characterClass || '-'}</td>
             <td>${extraServers.length ? extraServers.join(', ') : '-'}</td>
             <td>${pendingNickname ? renderNicknameRequestActions(user.id, pendingNickname) : '-'}</td>
+            <td>${formatUserRole(user.role)}</td>
             <td>${status}</td>
             <td>
                 <div class="approval-actions">
                     <button class="btn btn-secondary" onclick="promptChangeUserNickname('${user.id}', '${escapeForSingleQuote(user.nickname || '')}')">Nick</button>
                     <button class="btn btn-purple" onclick="openServerAccessModal('${user.id}')">Servidores</button>
+                    ${renderRoleActions(user.id, role)}
                     ${status === 'disabled'
                         ? `<button class="btn btn-green" onclick="setUserAccountStatus('${user.id}', 'approved')">Ativar</button>`
                         : `<button class="btn btn-danger" onclick="setUserAccountStatus('${user.id}', 'disabled')">Desativar</button>`}
@@ -1990,6 +2008,23 @@ function renderUsersManagementRows() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+function formatUserRole(role) {
+    const normalizedRole = normalizeRole(role);
+    if (normalizedRole === 'MASTER') return 'MASTER';
+    if (normalizedRole === 'STAFF') return 'STAFF';
+    if (normalizedRole === 'ADMIN') return 'ADMIN';
+    if (normalizedRole === 'LIDER') return 'Líder';
+    return 'Usuário';
+}
+
+function renderRoleActions(uid, role) {
+    if (!currentUser?.isHierarchyMaster || uid === currentUser.uid || role === 'MASTER') return '';
+    if (role === 'STAFF') {
+        return `<button class="btn btn-secondary" onclick="setUserRole('${uid}', 'user')">Remover Staff</button>`;
+    }
+    return `<button class="btn btn-blue" onclick="setUserRole('${uid}', 'STAFF')">Dar Staff</button>`;
 }
 
 function renderNicknameRequestActions(uid, nickname) {
@@ -2072,6 +2107,31 @@ window.promptChangeUserNickname = async function (uid, currentNickname) {
         await window.loadPendingApprovals();
     } catch (error) {
         alert('Erro ao trocar nick: ' + error.message);
+    }
+};
+
+window.setUserRole = async function (uid, role) {
+    if (!currentUser?.isHierarchyMaster) {
+        alert('Apenas MASTER pode alterar cargos.');
+        return;
+    }
+    if (uid === currentUser.uid) {
+        alert('Você não pode alterar o próprio cargo.');
+        return;
+    }
+
+    const roleLabel = role === 'STAFF' ? 'dar cargo STAFF para' : 'remover cargo STAFF de';
+    if (!confirm(`Deseja ${roleLabel} este usuário?`)) return;
+
+    try {
+        await setDoc(doc(db, "users", uid), {
+            role,
+            roleUpdatedBy: currentUser.uid,
+            roleUpdatedAt: Date.now()
+        }, { merge: true });
+        await window.loadPendingApprovals();
+    } catch (error) {
+        alert('Erro ao alterar cargo: ' + error.message);
     }
 };
 
