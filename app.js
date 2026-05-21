@@ -113,13 +113,18 @@ async function getDoc(ref) {
 async function setDoc(ref, data, options = {}) {
     const mapped = mapDocRef(ref);
     if (mapped.table === 'profiles') {
-        const row = toProfileRow(data);
-        if (options.merge) {
-            const existing = await getDoc(ref);
-            Object.assign(row, toProfileRow(existing.exists() ? existing.data() : {}), toProfileRow(data));
+        const existing = await getDoc(ref);
+        const row = options.merge && existing.exists()
+            ? { ...toProfileRow(existing.data()), ...toProfileRow(data) }
+            : toProfileRow(data);
+
+        if (existing.exists()) {
+            const { error } = await supabase.from('profiles').update(row).eq('id', mapped.id);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase.from('profiles').insert({ id: mapped.id, ...row });
+            if (error) throw error;
         }
-        const { error } = await supabase.from('profiles').upsert({ id: mapped.id, ...row }, { onConflict: 'id' });
-        if (error) throw error;
         return;
     }
     if (mapped.table === 'pending_approvals') return;
