@@ -42,12 +42,68 @@ const BLOCK_TIME_ZONES = {
     ASIA: 'Asia/Seoul',
     INMENA: 'Asia/Dubai'
 };
+const BLOCK_UTC_OFFSETS = {
+    SA: -3,
+    NA: -4,
+    EU: 2,
+    INMENA: 6,
+    ASIA: 8
+};
 const SERVER_OPTIONS_BY_BLOCK = {
     SA: ['SA011', 'SA012', 'SA013', 'SA014', 'SA021', 'SA022', 'SA023', 'SA031', 'SA032', 'SA033', 'SA041', 'BSA041'],
     NA: ['NA011', 'NA012', 'NA013', 'NA014', 'NA021', 'NA022', 'NA023', 'NA031', 'NA032', 'NA033', 'NA041', 'BNA051'],
     EU: ['EU011', 'EU012', 'EU014', 'EU021', 'EU022', 'EU023', 'EU024', 'EU031', 'BEU031'],
     INMENA: ['INMENA013', 'INMENA014', 'INMENA021', 'INMENA022', 'INMENA023', 'INMENA024', 'INMENA031', 'BINMENA021'],
     ASIA: ['ASIA011', 'ASIA012', 'ASIA014', 'ASIA021', 'ASIA023', 'ASIA024', 'ASIA031', 'ASIA032', 'ASIA033', 'ASIA034', 'ASIA041', 'ASIA051', 'ASIA052', 'ASIA053', 'ASIA061', 'ASIA062', 'ASIA063', 'ASIA081', 'ASIA082', 'ASIA091', 'ASIA311', 'ASIA313', 'ASIA314', 'ASIA321', 'ASIA322', 'ASIA323', 'ASIA324', 'ASIA331', 'ASIA332', 'ASIA333', 'ASIA334', 'ASIA341', 'BASIA011', 'BASIA012', 'BASIA013']
+};
+
+const SCHEDULE_BASE_BLOCK = 'SA';
+const WEEK_DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const WEEK_DAY_INDEX = WEEK_DAYS.reduce((map, day, index) => ({ ...map, [day]: index }), {});
+const regionalScheduleData = {
+    worldBoss: [
+        ['Segunda', '23:00', 'Krukan'],
+        ['Terça', '23:00', 'Nerkan'],
+        ['Quarta', '23:00', 'Hellbar'],
+        ['Quinta', '23:00', 'Turkan'],
+        ['Sexta', '23:00', 'Utukan']
+    ],
+    dailyEvents: [
+        ['Labirinto', ['10:00', '20:00']],
+        ['Vale', ['12:00', '22:00']],
+        ['Touro', ['22:00']],
+        ['Velho', ['00:00']],
+        ['5F Hydra', ['00:00']]
+    ],
+    magicSquare: [
+        ['Madrugada', ['00:00', '03:00']],
+        ['Manhã', ['06:00', '09:00']],
+        ['Tarde', ['12:00', '15:00', '18:00']],
+        ['Noite', ['21:00']]
+    ],
+    secretPeak: [
+        ['SUL', ['01:00', '07:00', '13:00', '19:00']],
+        ['NORTE', ['04:00', '10:00', '16:00', '22:00']]
+    ],
+    tower: [
+        [['09:00', '13:00'], ['11:00'], ['10:00', '12:00']],
+        [['15:00', '19:00'], ['17:00'], ['16:00', '18:00']],
+        [['21:00', '01:00'], ['23:00'], ['22:00', '00:00']]
+    ],
+    magicSquare11: [
+        ['Fury', ['05:00', '11:00', '17:00', '23:00']],
+        ['Frenzy', ['08:00', '14:00', '20:00', '02:00']]
+    ],
+    secretPeak11: [
+        ['Boss Sul', ['07:00', '19:00']],
+        ['Boss Norte', ['13:00', '01:00']]
+    ],
+    purgatory: [
+        ['1º Horário', ['06:00']],
+        ['2º Horário', ['12:00']],
+        ['3º Horário', ['18:00']],
+        ['4º Horário', ['00:00']]
+    ]
 };
 
 // Timer metadata
@@ -218,10 +274,12 @@ onAuthStateChanged(auth, async (user) => {
                 nickname: data.nickname,
                 block: data.block,
                 server: normalizeServerAlias(data.server),
+                extraServers: normalizeServerList(data.extraServers),
                 role: data.role || 'user',
                 status,
                 isMaster
             };
+            currentUser.allowedServers = buildAllowedServers(currentUser);
 
             if (!currentUser.isMaster && status !== 'approved') {
                 const statusMessages = {
@@ -254,6 +312,11 @@ onAuthStateChanged(auth, async (user) => {
             if (staffServerControl) {
                 staffServerControl.style.display = currentUser.isMaster ? 'flex' : 'none';
             }
+            const playerServerControl = document.getElementById('playerServerControl');
+            if (playerServerControl) {
+                playerServerControl.style.display = !currentUser.isMaster && currentUser.allowedServers.length > 1 ? 'flex' : 'none';
+                if (!currentUser.isMaster) renderPlayerServerSelect();
+            }
 
             changeFloor(7);
             if (currentUser.isMaster) await loadStaffServerOptions();
@@ -278,6 +341,7 @@ function updateHeader() {
     let serverText = currentServerView;
     if (currentUser.isMaster) serverText += ' 👑';
     document.getElementById('displayServer').textContent = serverText;
+    renderRegionalSchedule();
 }
 
 async function loadStaffServerOptions() {
@@ -291,6 +355,7 @@ async function loadStaffServerOptions() {
         snapshot.forEach(userDoc => {
             const server = normalizeServerAlias(userDoc.data().server);
             if (server) servers.add(server);
+            normalizeServerList(userDoc.data().extraServers).forEach(extraServer => servers.add(extraServer));
         });
     } catch (error) {
         console.warn('Não foi possível carregar servidores dos usuários:', error);
@@ -335,6 +400,38 @@ function renderStaffServerSelect(block, preferredServer = null) {
         select.value = servers[0];
     }
 }
+
+function renderPlayerServerSelect() {
+    const select = document.getElementById('playerServerSelect');
+    if (!select || !currentUser) return;
+    const servers = buildAllowedServers(currentUser);
+
+    select.innerHTML = '';
+    servers.forEach(server => {
+        const option = document.createElement('option');
+        option.value = server;
+        option.textContent = server;
+        select.appendChild(option);
+    });
+    select.value = servers.includes(currentServerView) ? currentServerView : currentUser.server;
+}
+
+window.changePlayerServer = function (server) {
+    if (!currentUser || currentUser.isMaster) return;
+    const normalizedServer = normalizeServerAlias(server);
+    const allowedServers = buildAllowedServers(currentUser);
+    if (!allowedServers.includes(normalizedServer)) {
+        alert('Você não tem acesso a este servidor.');
+        renderPlayerServerSelect();
+        return;
+    }
+
+    currentServerView = normalizedServer;
+    logViewCleared = false;
+    updateHeader();
+    listenToServerData();
+    changeFloor(currentFloor);
+};
 
 window.changeStaffBlock = function (block) {
     if (!currentUser?.isMaster) return;
@@ -536,6 +633,7 @@ window.switchMainTab = function (tabName) {
     } else if (tabName === 'schedule') {
         document.getElementById('tabSchedule').classList.add('active');
         document.getElementById('scheduleContainer').style.display = 'block';
+        renderRegionalSchedule();
     } else if (tabName === 'presence') {
         document.getElementById('tabPresence').classList.add('active');
         document.getElementById('presenceContainer').style.display = 'block';
@@ -750,6 +848,105 @@ window.promptMasterServer = function () {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+function renderRegionalSchedule() {
+    const container = document.getElementById('scheduleContainer');
+    if (!container || !currentServerView) return;
+
+    const block = inferBlockFromServer(currentServerView) || currentUser?.block || SCHEDULE_BASE_BLOCK;
+    const diffHours = getScheduleOffsetDiff(block);
+    const offsetLabel = formatUtcOffset(BLOCK_UTC_OFFSETS[block] ?? BLOCK_UTC_OFFSETS[SCHEDULE_BASE_BLOCK]);
+    const baseOffsetLabel = formatUtcOffset(BLOCK_UTC_OFFSETS[SCHEDULE_BASE_BLOCK]);
+    const note = document.getElementById('scheduleRegionNote');
+    if (note) {
+        note.textContent = `Horários ajustados para ${block} (${offsetLabel}). Base: ${SCHEDULE_BASE_BLOCK} (${baseOffsetLabel}).`;
+    }
+
+    renderScheduleRows('scheduleWorldBoss', regionalScheduleData.worldBoss.map(([day, time, boss]) => {
+        const converted = convertDayTime(day, time, diffHours);
+        return [converted, boss];
+    }));
+    renderScheduleRows('scheduleDailyEvents', regionalScheduleData.dailyEvents.map(([label, times]) => [label, formatScheduleTimes(times, diffHours)]));
+    renderScheduleRows('scheduleMagicSquare', regionalScheduleData.magicSquare.map(([label, times]) => [label, formatScheduleTimes(times, diffHours)]));
+    renderScheduleRows('scheduleSecretPeak', regionalScheduleData.secretPeak.map(([label, times]) => [label, formatScheduleTimes(times, diffHours, ' | '), 'red']));
+    renderTowerSchedule(diffHours);
+    renderScheduleRows('scheduleMagicSquare11', regionalScheduleData.magicSquare11.map(([label, times]) => [label, formatScheduleTimes(times, diffHours)]));
+    renderScheduleRows('scheduleSecretPeak11', regionalScheduleData.secretPeak11.map(([label, times]) => [label, formatScheduleTimes(times, diffHours)]));
+    renderScheduleRows('schedulePurgatory', regionalScheduleData.purgatory.map(([label, times]) => [label, formatScheduleTimes(times, diffHours)]));
+}
+
+function renderScheduleRows(tableId, rows) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    table.innerHTML = rows.map(([label, value, color]) => `
+        <tr>
+            <td${color === 'red' ? ' style="color:var(--red-primary)"' : ''}>${label}</td>
+            <td>${value}</td>
+        </tr>
+    `).join('');
+}
+
+function renderTowerSchedule(diffHours) {
+    const table = document.getElementById('scheduleTower');
+    if (!table) return;
+    const rows = regionalScheduleData.tower.map(([range, juja, event]) => `
+        <tr>
+            <td>${formatScheduleRange(range, diffHours)}</td>
+            <td>${formatScheduleTimes(juja, diffHours)}</td>
+            <td>${formatScheduleTimes(event, diffHours, ' / ')}</td>
+        </tr>
+    `).join('');
+
+    table.innerHTML = `
+        <tr>
+            <th>Horário</th>
+            <th>Juja</th>
+            <th>Evento</th>
+        </tr>
+        ${rows}
+    `;
+}
+
+function getScheduleOffsetDiff(block) {
+    const targetOffset = BLOCK_UTC_OFFSETS[block] ?? BLOCK_UTC_OFFSETS[SCHEDULE_BASE_BLOCK];
+    return targetOffset - BLOCK_UTC_OFFSETS[SCHEDULE_BASE_BLOCK];
+}
+
+function convertDayTime(day, time, diffHours) {
+    const converted = convertScheduleTime(time, diffHours);
+    const baseDayIndex = WEEK_DAY_INDEX[day] ?? 0;
+    const convertedDay = WEEK_DAYS[positiveModulo(baseDayIndex + converted.dayShift, WEEK_DAYS.length)];
+    return `${convertedDay} ${converted.time}`;
+}
+
+function formatScheduleTimes(times, diffHours, separator = ' | ') {
+    return times.map(time => convertScheduleTime(time, diffHours).time).join(separator);
+}
+
+function formatScheduleRange(range, diffHours) {
+    return range.map(time => convertScheduleTime(time, diffHours).time).join(' - ');
+}
+
+function convertScheduleTime(time, diffHours) {
+    const [hours, minutes] = time.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + diffHours * 60;
+    const dayShift = Math.floor(totalMinutes / 1440);
+    const normalizedMinutes = positiveModulo(totalMinutes, 1440);
+    const convertedHours = Math.floor(normalizedMinutes / 60);
+    const convertedMinutes = normalizedMinutes % 60;
+    return {
+        time: `${String(convertedHours).padStart(2, '0')}:${String(convertedMinutes).padStart(2, '0')}`,
+        dayShift
+    };
+}
+
+function positiveModulo(value, divisor) {
+    return ((value % divisor) + divisor) % divisor;
+}
+
+function formatUtcOffset(offset) {
+    return `UTC${offset >= 0 ? '+' : ''}${offset}`;
+}
+
 function updateClock() { document.getElementById('mainClock').textContent = formatTime(new Date()); }
 
 function normalizeRole(role) {
@@ -782,6 +979,19 @@ function normalizeServerAlias(server) {
     }
 
     return normalizedServer;
+}
+
+function normalizeServerList(servers) {
+    if (!Array.isArray(servers)) return [];
+    return [...new Set(servers
+        .map(server => normalizeServerAlias(server))
+        .filter(server => isValidServerName(server)))]
+        .sort(compareServerNames);
+}
+
+function buildAllowedServers(userData) {
+    if (!userData) return [];
+    return normalizeServerList([userData.server, ...(userData.extraServers || [])]);
 }
 
 function isValidServerName(server) {
@@ -1284,7 +1494,7 @@ window.loadUsersManagement = async function (existingSnapshot = null) {
     if (!currentUser || !currentUser.isMaster) return;
     const tbody = document.getElementById('usersManagementBody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6">Carregando...</td></tr>';
 
     try {
         const snapshot = existingSnapshot || await getDocs(collection(db, "users"));
@@ -1292,7 +1502,7 @@ window.loadUsersManagement = async function (existingSnapshot = null) {
         snapshot.forEach(userDoc => users.push({ id: userDoc.id, ...userDoc.data() }));
 
         if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5">Nenhum usuário encontrado.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6">Nenhum usuário encontrado.</td></tr>';
             return;
         }
 
@@ -1301,15 +1511,18 @@ window.loadUsersManagement = async function (existingSnapshot = null) {
             .sort((a, b) => (a.nickname || '').localeCompare(b.nickname || ''))
             .forEach(user => {
                 const status = normalizeStatus(user.status);
+                const extraServers = normalizeServerList(user.extraServers);
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${user.nickname || '-'}</td>
+                    <td><button class="link-button" onclick="openServerAccessModal('${user.id}')">${user.nickname || '-'}</button></td>
                     <td>${user.email || '-'}</td>
-                    <td>${user.server || '-'}</td>
+                    <td>${normalizeServerAlias(user.server) || '-'}</td>
+                    <td>${extraServers.length ? extraServers.join(', ') : '-'}</td>
                     <td>${status}</td>
                     <td>
                         <div class="approval-actions">
                             <button class="btn btn-secondary" onclick="promptChangeUserNickname('${user.id}', '${escapeForSingleQuote(user.nickname || '')}')">Nick</button>
+                            <button class="btn btn-purple" onclick="openServerAccessModal('${user.id}')">Servidores</button>
                             ${status === 'disabled'
                                 ? `<button class="btn btn-green" onclick="setUserAccountStatus('${user.id}', 'approved')">Ativar</button>`
                                 : `<button class="btn btn-danger" onclick="setUserAccountStatus('${user.id}', 'disabled')">Desativar</button>`}
@@ -1320,7 +1533,7 @@ window.loadUsersManagement = async function (existingSnapshot = null) {
             });
     } catch (error) {
         console.error('Erro ao carregar usuários:', error);
-        tbody.innerHTML = '<tr><td colspan="5">Erro ao carregar usuários.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6">Erro ao carregar usuários.</td></tr>';
     }
 };
 
@@ -1362,6 +1575,113 @@ window.setUserAccountStatus = async function (uid, status) {
         await window.loadPendingApprovals();
     } catch (error) {
         alert('Erro ao alterar status: ' + error.message);
+    }
+};
+
+window.openServerAccessModal = async function (uid) {
+    if (!currentUser || !currentUser.isMaster) return;
+
+    const overlay = document.getElementById('serverAccessOverlay');
+    const modal = document.getElementById('serverAccessModal');
+    const title = document.getElementById('serverAccessTitle');
+    const content = document.getElementById('serverAccessContent');
+    if (!overlay || !modal || !title || !content) return;
+
+    overlay.classList.add('show');
+    modal.classList.add('show');
+    content.innerHTML = '<p style="color:var(--text-muted);">Carregando servidores...</p>';
+
+    try {
+        const userSnap = await getDoc(doc(db, "users", uid));
+        if (!userSnap.exists()) {
+            content.innerHTML = '<p>Usuário não encontrado.</p>';
+            return;
+        }
+
+        const user = { id: uid, ...userSnap.data() };
+        const primaryServer = normalizeServerAlias(user.server);
+        const extraServers = normalizeServerList(user.extraServers);
+        const allServers = Object.values(SERVER_OPTIONS_BY_BLOCK).flat().sort(compareServerNames);
+        title.textContent = `Servidores de ${user.nickname || user.email || 'Jogador'}`;
+
+        const groupedHtml = Object.keys(SERVER_OPTIONS_BY_BLOCK)
+            .sort(compareBlockNames)
+            .map(block => {
+                const serverOptions = allServers
+                    .filter(server => inferBlockFromServer(server) === block)
+                    .map(server => {
+                        const checked = extraServers.includes(server) ? 'checked' : '';
+                        const disabled = server === primaryServer ? 'disabled' : '';
+                        const tag = server === primaryServer ? '<span class="server-access-primary">Principal</span>' : '';
+                        return `
+                            <label class="server-access-option">
+                                <input type="checkbox" value="${server}" ${checked} ${disabled}>
+                                <span>${server}</span>
+                                ${tag}
+                            </label>
+                        `;
+                    })
+                    .join('');
+                return `
+                    <div class="server-access-group">
+                        <div class="server-access-group-title">${block}</div>
+                        <div class="server-access-grid">${serverOptions}</div>
+                    </div>
+                `;
+            })
+            .join('');
+
+        content.innerHTML = `
+            <div class="server-access-summary">
+                Servidor principal: <strong>${primaryServer || '-'}</strong>. Marque abaixo os servidores extras que o jogador pode acessar.
+            </div>
+            ${groupedHtml}
+            <div class="server-access-actions">
+                <button class="btn btn-secondary" onclick="closeServerAccessModal()">Cancelar</button>
+                <button class="btn btn-green" onclick="saveServerAccess('${uid}', '${primaryServer}')">Salvar Acessos</button>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Erro ao abrir acessos do usuário:', error);
+        content.innerHTML = '<p>Erro ao carregar servidores do jogador.</p>';
+    }
+};
+
+window.closeServerAccessModal = function () {
+    const overlay = document.getElementById('serverAccessOverlay');
+    const modal = document.getElementById('serverAccessModal');
+    if (overlay) overlay.classList.remove('show');
+    if (modal) modal.classList.remove('show');
+};
+
+window.saveServerAccess = async function (uid, primaryServer) {
+    if (!currentUser || !currentUser.isMaster) return;
+    const content = document.getElementById('serverAccessContent');
+    if (!content) return;
+
+    const selectedServers = Array.from(content.querySelectorAll('.server-access-option input:checked'))
+        .map(input => normalizeServerAlias(input.value))
+        .filter(server => server !== primaryServer);
+    const extraServers = normalizeServerList(selectedServers);
+
+    try {
+        await setDoc(doc(db, "users", uid), {
+            extraServers,
+            extraServersUpdatedBy: currentUser.uid,
+            extraServersUpdatedAt: Date.now()
+        }, { merge: true });
+
+        if (uid === currentUser.uid) {
+            currentUser.extraServers = extraServers;
+            currentUser.allowedServers = buildAllowedServers(currentUser);
+            renderPlayerServerSelect();
+        }
+
+        window.closeServerAccessModal();
+        await window.loadUsersManagement();
+        await loadStaffServerOptions();
+    } catch (error) {
+        alert('Erro ao salvar acessos: ' + error.message);
     }
 };
 

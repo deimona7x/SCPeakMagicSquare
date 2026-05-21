@@ -1137,7 +1137,8 @@ body {
     letter-spacing: 0.5px;
 }
 
-.staff-server-control {
+.staff-server-control,
+.player-server-control {
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
@@ -1146,7 +1147,8 @@ body {
     background: rgba(168, 85, 247, 0.08);
 }
 
-.staff-server-control label {
+.staff-server-control label,
+.player-server-control label {
     color: var(--text-secondary);
     font-size: 0.72rem;
     font-weight: 700;
@@ -1154,7 +1156,8 @@ body {
     letter-spacing: 0.5px;
 }
 
-.staff-server-control select {
+.staff-server-control select,
+.player-server-control select {
     min-width: 86px;
     border: none;
     outline: none;
@@ -1165,7 +1168,8 @@ body {
     font-weight: 700;
 }
 
-.staff-server-control option {
+.staff-server-control option,
+.player-server-control option {
     background: var(--bg-panel);
     color: var(--text-primary);
 }
@@ -1256,6 +1260,18 @@ body {
 .schedule-container {
     padding: 20px 24px;
     flex: 1;
+}
+
+.schedule-region-note {
+    max-width: 1040px;
+    margin: 0 auto 14px;
+    padding: 10px 14px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: rgba(168, 85, 247, 0.08);
+    color: var(--text-secondary);
+    font-weight: 700;
+    text-align: center;
 }
 
 .schedule-grid-layout {
@@ -1550,6 +1566,20 @@ body {
 .approval-actions .btn {
     padding: 6px 10px;
     font-size: 0.75rem;
+}
+
+.link-button {
+    border: none;
+    padding: 0;
+    background: transparent;
+    color: var(--purple-primary);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.link-button:hover {
+    color: var(--gold-primary);
 }
 
 .leaders-compact {
@@ -1954,6 +1984,76 @@ body {
 .modal-content::-webkit-scrollbar-thumb {
     background: var(--purple-primary);
     border-radius: 3px;
+}
+
+.server-access-modal {
+    max-width: 760px;
+}
+
+.server-access-summary {
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    color: var(--text-secondary);
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+}
+
+.server-access-group {
+    margin-bottom: 16px;
+}
+
+.server-access-group-title {
+    margin-bottom: 8px;
+    color: var(--purple-primary);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.server-access-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    gap: 8px;
+}
+
+.server-access-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.server-access-option input {
+    accent-color: var(--purple-primary);
+}
+
+.server-access-option:has(input:disabled) {
+    opacity: 0.75;
+    cursor: not-allowed;
+}
+
+.server-access-primary {
+    margin-left: auto;
+    color: var(--gold-primary);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.server-access-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-default);
 }
 
 .print-item {

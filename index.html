@@ -78,6 +78,11 @@
                     <select id="staffServerSelect" onchange="changeStaffServer(this.value)">
                     </select>
                 </div>
+                <div class="player-server-control" id="playerServerControl" style="display:none;">
+                    <label for="playerServerSelect">Servidor</label>
+                    <select id="playerServerSelect" onchange="changePlayerServer(this.value)">
+                    </select>
+                </div>
                 <div class="clock" id="mainClock">00:00:00</div>
                 <div class="user-info" id="userInfo">
                     <span id="displayNickname">User</span> <span id="displayServer" style="color:var(--text-muted); font-size:0.85rem"></span>
@@ -415,32 +420,13 @@
         </div>
 
         <div class="schedule-container" id="scheduleContainer" style="display: none;">
+            <div class="schedule-region-note" id="scheduleRegionNote"></div>
             <div class="schedule-grid-layout">
                 <div class="schedule-col">
                     <div class="panel panel-yellow">
                         <div class="panel-header yellow-header">World Boss</div>
                         <div class="panel-body">
-                            <table class="timer-table fixed-schedule">
-                                <tr>
-                                    <td>Segunda 23:00</td>
-                                    <td>Krukan</td>
-                                </tr>
-                                <tr>
-                                    <td>Terça 23:00</td>
-                                    <td>Nerkan</td>
-                                </tr>
-                                <tr>
-                                    <td>Quarta 23:00</td>
-                                    <td>Hellbar</td>
-                                </tr>
-                                <tr>
-                                    <td>Quinta 23:00</td>
-                                    <td>Turkan</td>
-                                </tr>
-                                <tr>
-                                    <td>Sexta 23:00</td>
-                                    <td>Utukan</td>
-                                </tr>
+                            <table class="timer-table fixed-schedule" id="scheduleWorldBoss">
                             </table>
                         </div>
                     </div>
@@ -448,27 +434,7 @@
                     <div class="panel panel-info">
                         <div class="panel-header info-header">Eventos Diários</div>
                         <div class="panel-body">
-                            <table class="timer-table fixed-schedule">
-                                <tr>
-                                    <td>Labirinto</td>
-                                    <td>10:00 | 20:00</td>
-                                </tr>
-                                <tr>
-                                    <td>Vale</td>
-                                    <td>12:00 | 22:00</td>
-                                </tr>
-                                <tr>
-                                    <td>Touro</td>
-                                    <td>22:00</td>
-                                </tr>
-                                <tr>
-                                    <td>Velho</td>
-                                    <td>00:00</td>
-                                </tr>
-                                <tr>
-                                    <td>5F Hydra</td>
-                                    <td>00:00</td>
-                                </tr>
+                            <table class="timer-table fixed-schedule" id="scheduleDailyEvents">
                             </table>
                         </div>
                     </div>
@@ -478,23 +444,7 @@
                     <div class="panel panel-purple">
                         <div class="panel-header purple-header">Praça Mágica - Líder 3</div>
                         <div class="panel-body">
-                            <table class="timer-table fixed-schedule">
-                                <tr>
-                                    <td>Madrugada</td>
-                                    <td>00:00 | 03:00</td>
-                                </tr>
-                                <tr>
-                                    <td>Manhã</td>
-                                    <td>06:00 | 09:00</td>
-                                </tr>
-                                <tr>
-                                    <td>Tarde</td>
-                                    <td>12:00 | 15:00 | 18:00</td>
-                                </tr>
-                                <tr>
-                                    <td>Noite</td>
-                                    <td>21:00</td>
-                                </tr>
+                            <table class="timer-table fixed-schedule" id="scheduleMagicSquare">
                             </table>
                         </div>
                     </div>
@@ -502,15 +452,7 @@
                     <div class="panel panel-red-schedule">
                         <div class="panel-header red-header">Pico Secreto - Boss Red</div>
                         <div class="panel-body">
-                            <table class="timer-table fixed-schedule">
-                                <tr>
-                                    <td style="color:var(--red-primary)">SUL</td>
-                                    <td>01:00 | 07:00 | 13:00 | 19:00</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:var(--red-primary)">NORTE</td>
-                                    <td>04:00 | 10:00 | 16:00 | 22:00</td>
-                                </tr>
+                            <table class="timer-table fixed-schedule" id="scheduleSecretPeak">
                             </table>
                         </div>
                     </div>
@@ -518,27 +460,7 @@
                     <div class="panel panel-green">
                         <div class="panel-header green-header">Dominação - Torre</div>
                         <div class="panel-body">
-                            <table class="timer-table fixed-schedule compact">
-                                <tr>
-                                    <th>Horário</th>
-                                    <th>Juja</th>
-                                    <th>Evento</th>
-                                </tr>
-                                <tr>
-                                    <td>09:00 - 13:00</td>
-                                    <td>11:00</td>
-                                    <td>10:00 / 12:00</td>
-                                </tr>
-                                <tr>
-                                    <td>15:00 - 19:00</td>
-                                    <td>17:00</td>
-                                    <td>16:00 / 18:00</td>
-                                </tr>
-                                <tr>
-                                    <td>21:00 - 01:00</td>
-                                    <td>23:00</td>
-                                    <td>22:00 / 00:00</td>
-                                </tr>
+                            <table class="timer-table fixed-schedule compact" id="scheduleTower">
                             </table>
                         </div>
                     </div>
@@ -548,15 +470,7 @@
                     <div class="panel panel-info">
                         <div class="panel-header info-header">Praça 11 - MS 11</div>
                         <div class="panel-body">
-                            <table class="timer-table fixed-schedule">
-                                <tr>
-                                    <td>Fury</td>
-                                    <td>05:00 | 11:00 | 17:00 | 23:00</td>
-                                </tr>
-                                <tr>
-                                    <td>Frenzy</td>
-                                    <td>08:00 | 14:00 | 20:00 | 02:00</td>
-                                </tr>
+                            <table class="timer-table fixed-schedule" id="scheduleMagicSquare11">
                             </table>
                         </div>
                     </div>
@@ -564,15 +478,7 @@
                     <div class="panel panel-yellow">
                         <div class="panel-header yellow-header">Pico 11 - SP 11</div>
                         <div class="panel-body">
-                            <table class="timer-table fixed-schedule">
-                                <tr>
-                                    <td>Boss Sul</td>
-                                    <td>07:00 | 19:00</td>
-                                </tr>
-                                <tr>
-                                    <td>Boss Norte</td>
-                                    <td>13:00 | 01:00</td>
-                                </tr>
+                            <table class="timer-table fixed-schedule" id="scheduleSecretPeak11">
                             </table>
                         </div>
                     </div>
@@ -580,23 +486,7 @@
                     <div class="panel panel-gold-resource">
                         <div class="panel-header gold-resource-header">Purgatório</div>
                         <div class="panel-body">
-                            <table class="timer-table fixed-schedule">
-                                <tr>
-                                    <td>1º Horário</td>
-                                    <td>06:00</td>
-                                </tr>
-                                <tr>
-                                    <td>2º Horário</td>
-                                    <td>12:00</td>
-                                </tr>
-                                <tr>
-                                    <td>3º Horário</td>
-                                    <td>18:00</td>
-                                </tr>
-                                <tr>
-                                    <td>4º Horário</td>
-                                    <td>00:00</td>
-                                </tr>
+                            <table class="timer-table fixed-schedule" id="schedulePurgatory">
                             </table>
                         </div>
                     </div>
@@ -710,12 +600,13 @@
                                 <th>Nickname</th>
                                 <th>E-mail</th>
                                 <th>Servidor</th>
+                                <th>Acessos Extras</th>
                                 <th>Status</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="usersManagementBody">
-                            <tr><td colspan="5">Carregando...</td></tr>
+                            <tr><td colspan="6">Carregando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -730,6 +621,17 @@
                 <button class="modal-close" onclick="closePlayerPrintsModal()">✕</button>
             </div>
             <div class="modal-content" id="modalContent">
+            </div>
+        </div>
+
+        <!-- Modal de acessos extras do jogador -->
+        <div class="modal-overlay" id="serverAccessOverlay" onclick="closeServerAccessModal()"></div>
+        <div class="player-prints-modal server-access-modal" id="serverAccessModal">
+            <div class="modal-header">
+                <div class="modal-title" id="serverAccessTitle">Servidores do Jogador</div>
+                <button class="modal-close" onclick="closeServerAccessModal()">✕</button>
+            </div>
+            <div class="modal-content" id="serverAccessContent">
             </div>
         </div>
 
