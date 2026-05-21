@@ -989,6 +989,23 @@ body {
         grid-template-columns: 1fr;
     }
 
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .users-search-bar {
+        grid-template-columns: 1fr;
+        max-width: none;
+    }
+
+    .profile-actions {
+        justify-content: stretch;
+    }
+
+    .profile-actions .btn {
+        flex: 1 1 100%;
+    }
+
     .main-tab-nav {
         gap: 6px;
         padding: 10px 12px 0;
@@ -1566,6 +1583,94 @@ body {
 .approval-actions .btn {
     padding: 6px 10px;
     font-size: 0.75rem;
+}
+
+.users-search-bar {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(180px, 260px);
+    gap: 10px;
+    max-width: 620px;
+    margin: 0 0 14px auto;
+}
+
+.users-search-bar .schedule-input {
+    padding: 9px 12px;
+    font-size: 0.9rem;
+    text-align: left;
+}
+
+.profile-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.profile-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    color: var(--text-secondary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.profile-grid .schedule-input {
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    text-align: left;
+}
+
+.profile-status {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    background: var(--input-bg);
+    font-weight: 700;
+}
+
+.profile-status.pending {
+    color: var(--yellow-primary);
+    background: var(--yellow-bg);
+}
+
+.profile-status.approved {
+    color: var(--green-primary);
+    background: var(--green-bg);
+}
+
+.profile-status.rejected {
+    color: var(--red-primary);
+    background: var(--red-bg);
+}
+
+.profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+.nickname-request {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.nickname-request span {
+    width: 100%;
+    color: var(--yellow-primary);
+    font-weight: 700;
+}
+
+.nickname-request .btn {
+    padding: 5px 8px;
+    font-size: 0.7rem;
 }
 
 .link-button {

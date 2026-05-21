@@ -65,6 +65,7 @@
                     <button class="main-tab-btn active" id="tabTimers" onclick="switchMainTab('timers')">Timers</button>
                     <button class="main-tab-btn" id="tabSchedule" onclick="switchMainTab('schedule')">Horários</button>
                     <button class="main-tab-btn" id="tabPresence" onclick="switchMainTab('presence')">Presença</button>
+                    <button class="main-tab-btn" id="tabProfile" onclick="switchMainTab('profile')">Perfil</button>
                     <button class="main-tab-btn" id="tabApprovals" onclick="switchMainTab('approvals')" style="display:none;">Aprovações</button>
                     <button class="main-tab-btn" id="tabRanking" onclick="switchMainTab('ranking')" style="display:none;">Relatório</button>
                 </nav>
@@ -569,6 +570,55 @@
             </div>
         </div>
 
+        <div class="profile-container" id="profileContainer" style="display: none; padding: 20px 24px; max-width: 760px; margin: 0 auto; width: 100%;">
+            <div class="panel panel-purple">
+                <div class="panel-header purple-header">Meu Perfil</div>
+                <div class="panel-body">
+                    <div class="profile-grid">
+                        <label>
+                            Nickname atual
+                            <input type="text" id="profileCurrentNickname" class="schedule-input" disabled>
+                        </label>
+                        <label>
+                            E-mail
+                            <input type="text" id="profileEmail" class="schedule-input" disabled>
+                        </label>
+                        <label>
+                            Novo nickname
+                            <input type="text" id="profileNicknameRequest" class="schedule-input" placeholder="Solicitar troca de nickname">
+                        </label>
+                        <label>
+                            Classe
+                            <select id="profileClass" class="schedule-input">
+                                <option value="">Selecione...</option>
+                                <option value="Guerreiro (Warrior)">Guerreiro (Warrior)</option>
+                                <option value="Feiticeira (Sorcerer / Maga)">Feiticeira (Sorcerer / Maga)</option>
+                                <option value="Taoísta (Taoist)">Taoísta (Taoist)</option>
+                                <option value="Lanceiro (Lancer)">Lanceiro (Lancer)</option>
+                                <option value="Arbalista (Arbalist)">Arbalista (Arbalist)</option>
+                                <option value="Sinistro (Sinner)">Sinistro (Sinner)</option>
+                                <option value="Besteiro (Arbalist/Crossbow)">Besteiro (Arbalist/Crossbow)</option>
+                            </select>
+                        </label>
+                        <label>
+                            Power
+                            <input type="text" id="profilePower" class="schedule-input" placeholder="Ex: 423.280 PP">
+                        </label>
+                        <label>
+                            Level
+                            <input type="number" id="profileLevel" class="schedule-input" min="1" max="999" placeholder="Ex: 150">
+                        </label>
+                    </div>
+                    <div class="profile-status" id="profileNicknameStatus"></div>
+                    <div class="profile-actions">
+                        <button class="btn btn-purple" onclick="requestOwnNicknameChange()">Solicitar Nick</button>
+                        <button class="btn btn-green" onclick="saveOwnProfile()">Salvar Perfil</button>
+                        <button class="btn btn-blue" onclick="sendOwnPasswordReset()">Trocar Senha</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="approvals-container" id="approvalsContainer"
             style="display: none; padding: 20px 24px; max-width: 900px; margin: 0 auto; width: 100%;">
             <div class="panel panel-purple">
@@ -594,19 +644,34 @@
             <div class="panel panel-info" style="margin-top:20px;">
                 <div class="panel-header info-header">Gerenciar Usuários</div>
                 <div class="panel-body">
+                    <div class="users-search-bar">
+                        <input type="search" id="usersSearchInput" class="schedule-input" placeholder="Buscar por nickname" oninput="filterUsersManagement()">
+                        <select id="usersClassFilter" class="schedule-input" onchange="filterUsersManagement()">
+                            <option value="">Todas as classes</option>
+                            <option value="Guerreiro (Warrior)">Guerreiro</option>
+                            <option value="Feiticeira (Sorcerer / Maga)">Feiticeira / Maga</option>
+                            <option value="Taoísta (Taoist)">Taoísta</option>
+                            <option value="Lanceiro (Lancer)">Lanceiro</option>
+                            <option value="Arbalista (Arbalist)">Arbalista</option>
+                            <option value="Sinistro (Sinner)">Sinistro</option>
+                            <option value="Besteiro (Arbalist/Crossbow)">Besteiro</option>
+                        </select>
+                    </div>
                     <table class="timer-table" id="usersManagementTable">
                         <thead>
                             <tr>
                                 <th>Nickname</th>
                                 <th>E-mail</th>
                                 <th>Servidor</th>
+                                <th>Classe</th>
                                 <th>Acessos Extras</th>
+                                <th>Pedido Nick</th>
                                 <th>Status</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="usersManagementBody">
-                            <tr><td colspan="6">Carregando...</td></tr>
+                            <tr><td colspan="8">Carregando...</td></tr>
                         </tbody>
                     </table>
                 </div>

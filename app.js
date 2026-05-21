@@ -1,23 +1,403 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, orderBy, limit, addDoc, writeBatch, getDocs, where, runTransaction, deleteDoc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-storage.js";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-// Firebase configuration
-const firebaseConfig = {
-    apiKey: "AIzaSyDu6GPNdju2yBssczjLvtkPPfwrlKo7ltw",
-    authDomain: "picosecretotracker.firebaseapp.com",
-    projectId: "picosecretotracker",
-    storageBucket: "picosecretotracker.firebasestorage.app",
-    messagingSenderId: "568151364129",
-    appId: "1:568151364129:web:c478efff3ca62d4c000960"
-};
+const SUPABASE_URL = "https://vjeguusinkmlvvpdyxng.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_IaH-oGMMnrrSR0kGJ1izvw_4qDfmwP2";
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const auth = supabase.auth;
+const db = supabase;
+
+function doc(_db, ...segments) {
+    return { type: 'doc', path: normalizePathSegments(segments) };
+}
+
+function collection(_db, ...segments) {
+    return { type: 'collection', path: normalizePathSegments(segments) };
+}
+
+function query(ref, ...constraints) {
+    return { ...ref, constraints: constraints.flat().filter(Boolean) };
+}
+
+function where(field, operator, value) {
+    return { kind: 'where', field, operator, value };
+}
+
+function orderBy(field, direction = 'asc') {
+    return { kind: 'orderBy', field, direction };
+}
+
+function limit(count) {
+    return { kind: 'limit', count };
+}
+
+function normalizePathSegments(segments) {
+    return segments.flatMap(segment => String(segment).split('/').filter(Boolean));
+}
+
+function createDocSnapshot(id, data) {
+    return {
+        id,
+        exists: () => data !== null && data !== undefined,
+        data: () => data
+    };
+}
+
+function createQuerySnapshot(rows) {
+    const docs = rows.map(row => createDocSnapshot(row.id, row.data));
+    return {
+        docs,
+        empty: docs.length === 0,
+        forEach: callback => docs.forEach(callback)
+    };
+}
+
+async function signInWithEmailAndPassword(_auth, email, password) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return { user: data.user };
+}
+
+async function createUserWithEmailAndPassword(_auth, email, password, metadata = {}) {
+    const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: metadata }
+    });
+    if (error) throw error;
+    const user = data.user || data.session?.user || null;
+    if (!user) {
+        throw new Error('Cadastro enviado ao Supabase, mas nenhum usuário foi retornado. Se a confirmação por e-mail estiver ativada, confirme o e-mail e tente fazer login. Se este e-mail já existir, use login ou redefina a senha.');
+    }
+    return { user };
+}
+
+async function signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+}
+
+async function sendPasswordResetEmail(_auth, email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+}
+
+function onAuthStateChanged(_auth, callback) {
+    supabase.auth.getSession().then(({ data }) => callback(data.session?.user || null));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        callback(session?.user || null);
+    });
+    return () => data.subscription.unsubscribe();
+}
+
+async function getDoc(ref) {
+    const mapped = mapDocRef(ref);
+    if (mapped.table === 'profiles') {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', mapped.id).maybeSingle();
+        if (error) throw error;
+        return createDocSnapshot(mapped.id, data ? fromProfileRow(data) : null);
+    }
+    if (mapped.table === 'server_state') {
+        const { data, error } = await supabase
+            .from('server_state')
+            .select('value')
+            .eq('server', mapped.server)
+            .eq('key', mapped.key)
+            .maybeSingle();
+        if (error) throw error;
+        return createDocSnapshot(mapped.key, data ? data.value : null);
+    }
+    return createDocSnapshot(mapped.id || ref.path.join('/'), null);
+}
+
+async function setDoc(ref, data, options = {}) {
+    const mapped = mapDocRef(ref);
+    if (mapped.table === 'profiles') {
+        const row = toProfileRow(data);
+        if (options.merge) {
+            const existing = await getDoc(ref);
+            Object.assign(row, toProfileRow(existing.exists() ? existing.data() : {}), toProfileRow(data));
+        }
+        const { error } = await supabase.from('profiles').upsert({ id: mapped.id, ...row }, { onConflict: 'id' });
+        if (error) throw error;
+        return;
+    }
+    if (mapped.table === 'pending_approvals') return;
+    if (mapped.table === 'server_state') {
+        const { error } = await supabase.from('server_state').upsert({
+            server: mapped.server,
+            key: mapped.key,
+            value: data || {},
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'server,key' });
+        if (error) throw error;
+    }
+}
+
+async function deleteDoc(ref) {
+    const mapped = mapDocRef(ref);
+    if (mapped.table === 'pending_approvals') return;
+    if (mapped.table === 'profiles') {
+        const { error } = await supabase.from('profiles').delete().eq('id', mapped.id);
+        if (error) throw error;
+    }
+}
+
+async function getDocs(ref) {
+    const mapped = mapCollectionRef(ref);
+    if (mapped.table === 'profiles') {
+        let builder = supabase.from('profiles').select('*');
+        if (mapped.pendingOnly) builder = builder.eq('status', 'pending');
+        builder = applyQueryConstraints(builder, ref.constraints);
+        const { data, error } = await builder;
+        if (error) throw error;
+        return createQuerySnapshot((data || []).map(row => ({ id: row.id, data: fromProfileRow(row) })));
+    }
+    if (mapped.table === 'server_logs') {
+        let builder = supabase.from('server_logs').select('*').eq('server', mapped.server);
+        builder = applyQueryConstraints(builder, ref.constraints);
+        const { data, error } = await builder;
+        if (error) throw error;
+        return createQuerySnapshot((data || []).map(row => ({ id: row.id, data: fromLogRow(row) })));
+    }
+    if (mapped.table === 'attendance') {
+        let builder = supabase.from('attendance').select('*').eq('server', mapped.server);
+        builder = applyQueryConstraints(builder, ref.constraints);
+        const { data, error } = await builder;
+        if (error) throw error;
+        return createQuerySnapshot((data || []).map(row => ({ id: row.id, data: fromAttendanceRow(row) })));
+    }
+    return createQuerySnapshot([]);
+}
+
+async function addDoc(ref, data) {
+    const mapped = mapCollectionRef(ref);
+    if (mapped.table === 'server_logs') {
+        const { data: row, error } = await supabase
+            .from('server_logs')
+            .insert(toLogRow(mapped.server, data))
+            .select('id')
+            .single();
+        if (error) throw error;
+        return { id: row.id };
+    }
+    if (mapped.table === 'attendance') {
+        const { data: row, error } = await supabase
+            .from('attendance')
+            .insert(toAttendanceRow(mapped.server, data))
+            .select('id')
+            .single();
+        if (error) throw error;
+        return { id: row.id };
+    }
+}
+
+function onSnapshot(ref, callback) {
+    let active = true;
+    const load = async () => {
+        if (!active) return;
+        try {
+            if (ref.type === 'doc') callback(await getDoc(ref));
+            else callback(await getDocs(ref));
+        } catch (error) {
+            console.error('Erro no realtime Supabase:', error);
+        }
+    };
+    load();
+
+    const mapped = ref.type === 'doc' ? mapDocRef(ref) : mapCollectionRef(ref);
+    const table = mapped.table === 'pending_approvals' ? 'profiles' : mapped.table;
+    const channel = supabase.channel(`realtime:${ref.path.join(':')}:${Math.random()}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, load)
+        .subscribe();
+
+    return () => {
+        active = false;
+        supabase.removeChannel(channel);
+    };
+}
+
+async function runTransaction(_db, callback) {
+    const writes = [];
+    const transaction = {
+        get: getDoc,
+        set: (ref, data, options) => {
+            writes.push(() => setDoc(ref, data, options));
+        }
+    };
+    const result = await callback(transaction);
+    for (const write of writes) await write();
+    return result;
+}
+
+function mapDocRef(ref) {
+    const [first, second, third, fourth] = ref.path;
+    if (first === 'users') return { table: 'profiles', id: second };
+    if (first === 'pendingApprovals') return { table: 'pending_approvals', id: second };
+    if (first === 'servers' && third === 'data') return { table: 'server_state', server: second, key: fourth };
+    return { table: first, id: second };
+}
+
+function mapCollectionRef(ref) {
+    const [first, second, third] = ref.path;
+    if (first === 'users') return { table: 'profiles' };
+    if (first === 'pendingApprovals') return { table: 'profiles', pendingOnly: true };
+    if (first === 'servers' && third === 'logs') return { table: 'server_logs', server: second };
+    if (first === 'servers' && third === 'attendance') return { table: 'attendance', server: second };
+    return { table: first };
+}
+
+function applyQueryConstraints(builder, constraints = []) {
+    constraints.forEach(constraint => {
+        if (constraint.kind === 'where') {
+            builder = applyWhere(builder, constraint);
+        } else if (constraint.kind === 'orderBy') {
+            builder = builder.order(toColumnName(constraint.field), { ascending: constraint.direction !== 'desc' });
+        } else if (constraint.kind === 'limit') {
+            builder = builder.limit(constraint.count);
+        }
+    });
+    return builder;
+}
+
+function applyWhere(builder, constraint) {
+    const column = toColumnName(constraint.field);
+    if (constraint.operator === '==') return builder.eq(column, constraint.value);
+    if (constraint.operator === '!=') return builder.neq(column, constraint.value);
+    if (constraint.operator === '>') return builder.gt(column, constraint.value);
+    if (constraint.operator === '<') return builder.lt(column, constraint.value);
+    if (constraint.operator === '>=') return builder.gte(column, constraint.value);
+    if (constraint.operator === '<=') return builder.lte(column, constraint.value);
+    return builder.eq(column, constraint.value);
+}
+
+function toColumnName(field) {
+    const map = {
+        weekNumber: 'week_number',
+        subEvent: 'sub_event',
+        imageUrl: 'image_url',
+        user: 'user_name',
+        server: 'user_server'
+    };
+    return map[field] || field;
+}
+
+function toProfileRow(data) {
+    return stripUndefined({
+        email: data.email,
+        nickname: data.nickname,
+        block: data.block,
+        server: data.server,
+        extra_servers: data.extraServers,
+        role: data.role,
+        status: data.status,
+        character_class: data.characterClass,
+        power: data.power,
+        level: data.level,
+        nickname_change_request: data.nicknameChangeRequest,
+        created_at: data.createdAt,
+        approved_by: data.approvedBy,
+        approved_at: data.approvedAt,
+        rejected_by: data.rejectedBy,
+        rejected_at: data.rejectedAt,
+        status_updated_by: data.statusUpdatedBy,
+        status_updated_at: data.statusUpdatedAt,
+        nickname_updated_by: data.nicknameUpdatedBy,
+        nickname_updated_at: data.nicknameUpdatedAt,
+        profile_updated_at: data.profileUpdatedAt,
+        extra_servers_updated_by: data.extraServersUpdatedBy,
+        extra_servers_updated_at: data.extraServersUpdatedAt
+    });
+}
+
+function fromProfileRow(row) {
+    return {
+        uid: row.id,
+        email: row.email,
+        nickname: row.nickname,
+        block: row.block,
+        server: row.server,
+        extraServers: row.extra_servers || [],
+        role: row.role,
+        status: row.status,
+        characterClass: row.character_class || '',
+        power: row.power || '',
+        level: row.level || '',
+        nicknameChangeRequest: row.nickname_change_request || null,
+        createdAt: row.created_at,
+        approvedBy: row.approved_by,
+        approvedAt: row.approved_at,
+        rejectedBy: row.rejected_by,
+        rejectedAt: row.rejected_at,
+        statusUpdatedBy: row.status_updated_by,
+        statusUpdatedAt: row.status_updated_at,
+        nicknameUpdatedBy: row.nickname_updated_by,
+        nicknameUpdatedAt: row.nickname_updated_at,
+        profileUpdatedAt: row.profile_updated_at,
+        extraServersUpdatedBy: row.extra_servers_updated_by,
+        extraServersUpdatedAt: row.extra_servers_updated_at
+    };
+}
+
+function toLogRow(server, data) {
+    return {
+        server,
+        timestamp: data.timestamp,
+        time: data.time,
+        user_name: data.user,
+        user_server: data.server,
+        floor: data.floor,
+        action: data.action,
+        target: data.target
+    };
+}
+
+function fromLogRow(row) {
+    return {
+        timestamp: row.timestamp,
+        time: row.time,
+        user: row.user_name,
+        server: row.user_server,
+        floor: row.floor,
+        action: row.action,
+        target: row.target
+    };
+}
+
+function toAttendanceRow(server, data) {
+    return {
+        server,
+        uid: data.uid,
+        nickname: data.nickname,
+        block: data.block,
+        user_server: data.server,
+        event: data.event,
+        sub_event: data.subEvent,
+        image_url: data.imageUrl,
+        timestamp: data.timestamp,
+        week_number: data.weekNumber,
+        points: data.points
+    };
+}
+
+function fromAttendanceRow(row) {
+    return {
+        uid: row.uid,
+        nickname: row.nickname,
+        block: row.block,
+        server: row.user_server,
+        event: row.event,
+        subEvent: row.sub_event,
+        imageUrl: row.image_url,
+        timestamp: row.timestamp,
+        weekNumber: row.week_number,
+        points: row.points
+    };
+}
+
+function stripUndefined(value) {
+    return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
 
 // State
 let currentUser = null;
@@ -29,6 +409,7 @@ let unsubTimers = null;
 let unsubLogs = null;
 let unsubSchedule = null;
 let unsubClaims = null;
+let usersManagementCache = [];
 let claimsData = { 7: {}, 8: {}, 9: {}, 10: {} };
 
 // CORRIGIDO: controla se a vista do log foi manualmente limpa
@@ -261,20 +642,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        const docRef = doc(db, "users", user.uid);
-        const docSnap = await getDoc(docRef);
+        const userId = user.id || user.uid;
+        let docSnap;
+        try {
+            const docRef = doc(db, "users", userId);
+            docSnap = await getDoc(docRef);
+        } catch (error) {
+            console.error('Erro ao carregar perfil:', error);
+            alert('Login autenticou, mas não foi possível carregar seu perfil: ' + error.message);
+            await signOut(auth);
+            return;
+        }
 
         if (docSnap.exists()) {
             const data = docSnap.data();
             const status = normalizeStatus(data.status);
             const isMaster = isMasterUser(data);
             currentUser = {
-                uid: user.uid,
+                uid: userId,
                 email: user.email,
                 nickname: data.nickname,
                 block: data.block,
                 server: normalizeServerAlias(data.server),
                 extraServers: normalizeServerList(data.extraServers),
+                characterClass: data.characterClass || '',
+                power: data.power || '',
+                level: data.level || '',
+                nicknameChangeRequest: data.nicknameChangeRequest || null,
                 role: data.role || 'user',
                 status,
                 isMaster
@@ -321,6 +715,9 @@ onAuthStateChanged(auth, async (user) => {
             changeFloor(7);
             if (currentUser.isMaster) await loadStaffServerOptions();
             listenToServerData();
+        } else {
+            alert('Sua autenticação existe no Supabase, mas o perfil ainda não foi criado. Rode o arquivo supabase-schema.sql no SQL Editor e faça o cadastro novamente.');
+            await signOut(auth);
         }
     } else {
         currentUser = null;
@@ -587,9 +984,10 @@ window.performRegister = async function () {
         return;
     }
     try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password, { nickname, block, server });
+        const userId = userCredential.user.id || userCredential.user.uid;
         const pendingUser = {
-            uid: userCredential.user.uid,
+            uid: userId,
             email,
             nickname,
             block,
@@ -598,8 +996,12 @@ window.performRegister = async function () {
             status: 'pending',
             createdAt: Date.now()
         };
-        await setDoc(doc(db, "users", userCredential.user.uid), pendingUser);
-        await setDoc(doc(db, "pendingApprovals", userCredential.user.uid), pendingUser);
+        try {
+            await setDoc(doc(db, "users", userId), pendingUser, { merge: true });
+        } catch (profileError) {
+            console.warn('Perfil criado pelo trigger do Supabase; atualização local adiada:', profileError);
+        }
+        await setDoc(doc(db, "pendingApprovals", userId), pendingUser);
         alert('Cadastro enviado! Aguarde aprovação de um Staff.');
         await signOut(auth);
     } catch (error) { alert('Erro ao cadastrar: ' + error.message); }
@@ -614,6 +1016,7 @@ window.switchMainTab = function (tabName) {
     document.getElementById('tabTimers').classList.remove('active');
     document.getElementById('tabSchedule').classList.remove('active');
     document.getElementById('tabPresence').classList.remove('active');
+    document.getElementById('tabProfile').classList.remove('active');
     document.getElementById('tabApprovals').classList.remove('active');
     document.getElementById('tabRanking').classList.remove('active');
 
@@ -622,6 +1025,7 @@ window.switchMainTab = function (tabName) {
     document.getElementById('mainGrid').style.display = 'none';
     document.getElementById('scheduleContainer').style.display = 'none';
     document.getElementById('presenceContainer').style.display = 'none';
+    document.getElementById('profileContainer').style.display = 'none';
     document.getElementById('approvalsContainer').style.display = 'none';
     document.getElementById('rankingContainer').style.display = 'none';
 
@@ -637,6 +1041,10 @@ window.switchMainTab = function (tabName) {
     } else if (tabName === 'presence') {
         document.getElementById('tabPresence').classList.add('active');
         document.getElementById('presenceContainer').style.display = 'block';
+    } else if (tabName === 'profile') {
+        document.getElementById('tabProfile').classList.add('active');
+        document.getElementById('profileContainer').style.display = 'block';
+        renderOwnProfile();
     } else if (tabName === 'approvals') {
         document.getElementById('tabApprovals').classList.add('active');
         document.getElementById('approvalsContainer').style.display = 'block';
@@ -945,6 +1353,19 @@ function positiveModulo(value, divisor) {
 
 function formatUtcOffset(offset) {
     return `UTC${offset >= 0 ? '+' : ''}${offset}`;
+}
+
+function maskEmail(email) {
+    const value = String(email || '').trim();
+    if (!value) return '-';
+    const [localPart, domain = ''] = value.split('@');
+    const visible = localPart.slice(0, 3);
+    const hiddenLength = Math.max(localPart.length - visible.length, 3);
+    return `${visible}${'*'.repeat(hiddenLength)}${domain ? `@${domain}` : ''}`;
+}
+
+function normalizeSearchText(value) {
+    return String(value || '').trim().toLowerCase();
 }
 
 function updateClock() { document.getElementById('mainClock').textContent = formatTime(new Date()); }
@@ -1439,7 +1860,7 @@ window.loadPendingApprovals = async function () {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${user.nickname || '-'}</td>
-                <td>${user.email || '-'}</td>
+                <td>${maskEmail(user.email)}</td>
                 <td>${user.block || '-'}</td>
                 <td>${user.server || '-'}</td>
                 <td>
@@ -1494,46 +1915,141 @@ window.loadUsersManagement = async function (existingSnapshot = null) {
     if (!currentUser || !currentUser.isMaster) return;
     const tbody = document.getElementById('usersManagementBody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6">Carregando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8">Carregando...</td></tr>';
 
     try {
         const snapshot = existingSnapshot || await getDocs(collection(db, "users"));
         const users = [];
         snapshot.forEach(userDoc => users.push({ id: userDoc.id, ...userDoc.data() }));
+        usersManagementCache = users.sort((a, b) => (a.nickname || '').localeCompare(b.nickname || ''));
 
-        if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6">Nenhum usuário encontrado.</td></tr>';
+        renderUsersManagementRows();
+    } catch (error) {
+        console.error('Erro ao carregar usuários:', error);
+        tbody.innerHTML = '<tr><td colspan="8">Erro ao carregar usuários.</td></tr>';
+    }
+};
+
+window.filterUsersManagement = function () {
+    if (!currentUser || !currentUser.isMaster) return;
+    renderUsersManagementRows();
+};
+
+function renderUsersManagementRows() {
+    const tbody = document.getElementById('usersManagementBody');
+    if (!tbody) return;
+
+    const searchTerm = document.getElementById('usersSearchInput')?.value || '';
+    const selectedClass = document.getElementById('usersClassFilter')?.value || '';
+    const normalizedSearch = normalizeSearchText(searchTerm);
+    const users = usersManagementCache.filter(user => {
+        const matchesNickname = !normalizedSearch || normalizeSearchText(user.nickname).includes(normalizedSearch);
+        const matchesClass = !selectedClass || user.characterClass === selectedClass;
+        return matchesNickname && matchesClass;
+    });
+
+    if (usersManagementCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8">Nenhum usuário encontrado.</td></tr>';
+        return;
+    }
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8">Nenhum jogador encontrado para essa busca.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    users.forEach(user => {
+        const status = normalizeStatus(user.status);
+        const extraServers = normalizeServerList(user.extraServers);
+        const nicknameRequest = user.nicknameChangeRequest || {};
+        const requestStatus = normalizeStatus(nicknameRequest.status || '');
+        const pendingNickname = requestStatus === 'pending' && nicknameRequest.nickname ? nicknameRequest.nickname : '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><button class="link-button" onclick="openServerAccessModal('${user.id}')">${user.nickname || '-'}</button></td>
+            <td>${maskEmail(user.email)}</td>
+            <td>${normalizeServerAlias(user.server) || '-'}</td>
+            <td>${user.characterClass || '-'}</td>
+            <td>${extraServers.length ? extraServers.join(', ') : '-'}</td>
+            <td>${pendingNickname ? renderNicknameRequestActions(user.id, pendingNickname) : '-'}</td>
+            <td>${status}</td>
+            <td>
+                <div class="approval-actions">
+                    <button class="btn btn-secondary" onclick="promptChangeUserNickname('${user.id}', '${escapeForSingleQuote(user.nickname || '')}')">Nick</button>
+                    <button class="btn btn-purple" onclick="openServerAccessModal('${user.id}')">Servidores</button>
+                    ${status === 'disabled'
+                        ? `<button class="btn btn-green" onclick="setUserAccountStatus('${user.id}', 'approved')">Ativar</button>`
+                        : `<button class="btn btn-danger" onclick="setUserAccountStatus('${user.id}', 'disabled')">Desativar</button>`}
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderNicknameRequestActions(uid, nickname) {
+    return `
+        <div class="nickname-request">
+            <span>${nickname}</span>
+            <button class="btn btn-green" onclick="approveNicknameChange('${uid}')">Aprovar</button>
+            <button class="btn btn-danger" onclick="rejectNicknameChange('${uid}')">Rejeitar</button>
+        </div>
+    `;
+}
+
+window.approveNicknameChange = async function (uid) {
+    if (!currentUser || !currentUser.isMaster) return;
+
+    try {
+        const userSnap = await getDoc(doc(db, "users", uid));
+        if (!userSnap.exists()) {
+            alert('Usuário não encontrado.');
             return;
         }
 
-        tbody.innerHTML = '';
-        users
-            .sort((a, b) => (a.nickname || '').localeCompare(b.nickname || ''))
-            .forEach(user => {
-                const status = normalizeStatus(user.status);
-                const extraServers = normalizeServerList(user.extraServers);
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><button class="link-button" onclick="openServerAccessModal('${user.id}')">${user.nickname || '-'}</button></td>
-                    <td>${user.email || '-'}</td>
-                    <td>${normalizeServerAlias(user.server) || '-'}</td>
-                    <td>${extraServers.length ? extraServers.join(', ') : '-'}</td>
-                    <td>${status}</td>
-                    <td>
-                        <div class="approval-actions">
-                            <button class="btn btn-secondary" onclick="promptChangeUserNickname('${user.id}', '${escapeForSingleQuote(user.nickname || '')}')">Nick</button>
-                            <button class="btn btn-purple" onclick="openServerAccessModal('${user.id}')">Servidores</button>
-                            ${status === 'disabled'
-                                ? `<button class="btn btn-green" onclick="setUserAccountStatus('${user.id}', 'approved')">Ativar</button>`
-                                : `<button class="btn btn-danger" onclick="setUserAccountStatus('${user.id}', 'disabled')">Desativar</button>`}
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+        const request = userSnap.data().nicknameChangeRequest || {};
+        const nickname = String(request.nickname || '').trim();
+        if (!nickname || normalizeStatus(request.status) !== 'pending') {
+            alert('Não há pedido de nickname pendente.');
+            return;
+        }
+        if (!confirm(`Aprovar troca de nick para "${nickname}"?`)) return;
+
+        await setDoc(doc(db, "users", uid), {
+            nickname,
+            nicknameChangeRequest: {
+                ...request,
+                status: 'approved',
+                approvedBy: currentUser.uid,
+                approvedAt: Date.now()
+            },
+            nicknameUpdatedBy: currentUser.uid,
+            nicknameUpdatedAt: Date.now()
+        }, { merge: true });
+        await window.loadPendingApprovals();
     } catch (error) {
-        console.error('Erro ao carregar usuários:', error);
-        tbody.innerHTML = '<tr><td colspan="6">Erro ao carregar usuários.</td></tr>';
+        alert('Erro ao aprovar nick: ' + error.message);
+    }
+};
+
+window.rejectNicknameChange = async function (uid) {
+    if (!currentUser || !currentUser.isMaster) return;
+    if (!confirm('Rejeitar pedido de troca de nickname?')) return;
+
+    try {
+        const userSnap = await getDoc(doc(db, "users", uid));
+        const request = userSnap.exists() ? userSnap.data().nicknameChangeRequest || {} : {};
+        await setDoc(doc(db, "users", uid), {
+            nicknameChangeRequest: {
+                ...request,
+                status: 'rejected',
+                rejectedBy: currentUser.uid,
+                rejectedAt: Date.now()
+            }
+        }, { merge: true });
+        await window.loadPendingApprovals();
+    } catch (error) {
+        alert('Erro ao rejeitar nick: ' + error.message);
     }
 };
 
@@ -1685,6 +2201,104 @@ window.saveServerAccess = async function (uid, primaryServer) {
     }
 };
 
+function renderOwnProfile() {
+    if (!currentUser) return;
+
+    setInputValue('profileCurrentNickname', currentUser.nickname || '');
+    setInputValue('profileEmail', maskEmail(currentUser.email));
+    setInputValue('profileClass', currentUser.characterClass || '');
+    setInputValue('profilePower', currentUser.power || '');
+    setInputValue('profileLevel', currentUser.level || '');
+
+    const request = currentUser.nicknameChangeRequest || {};
+    const statusEl = document.getElementById('profileNicknameStatus');
+    if (!statusEl) return;
+
+    const status = normalizeStatus(request.status || '');
+    if (status === 'pending' && request.nickname) {
+        statusEl.textContent = `Pedido de nickname pendente: ${request.nickname}`;
+        statusEl.className = 'profile-status pending';
+    } else if (status === 'rejected') {
+        statusEl.textContent = 'Seu último pedido de nickname foi rejeitado.';
+        statusEl.className = 'profile-status rejected';
+    } else if (status === 'approved') {
+        statusEl.textContent = 'Seu último pedido de nickname foi aprovado.';
+        statusEl.className = 'profile-status approved';
+    } else {
+        statusEl.textContent = 'Trocas de nickname precisam ser aprovadas por um Staff.';
+        statusEl.className = 'profile-status';
+    }
+}
+
+window.saveOwnProfile = async function () {
+    if (!currentUser) return;
+
+    const characterClass = document.getElementById('profileClass')?.value || '';
+    const power = document.getElementById('profilePower')?.value.trim() || '';
+    const level = document.getElementById('profileLevel')?.value || '';
+
+    try {
+        await setDoc(doc(db, "users", currentUser.uid), {
+            characterClass,
+            power,
+            level,
+            profileUpdatedAt: Date.now()
+        }, { merge: true });
+
+        currentUser.characterClass = characterClass;
+        currentUser.power = power;
+        currentUser.level = level;
+        alert('Perfil salvo.');
+    } catch (error) {
+        alert('Erro ao salvar perfil: ' + error.message);
+    }
+};
+
+window.requestOwnNicknameChange = async function () {
+    if (!currentUser) return;
+    const nickname = document.getElementById('profileNicknameRequest')?.value.trim();
+    if (!nickname) {
+        alert('Digite o novo nickname desejado.');
+        return;
+    }
+    if (nickname === currentUser.nickname) {
+        alert('Esse já é o seu nickname atual.');
+        return;
+    }
+
+    try {
+        const nicknameChangeRequest = {
+            nickname,
+            status: 'pending',
+            requestedAt: Date.now()
+        };
+        await setDoc(doc(db, "users", currentUser.uid), { nicknameChangeRequest }, { merge: true });
+        currentUser.nicknameChangeRequest = nicknameChangeRequest;
+        setInputValue('profileNicknameRequest', '');
+        renderOwnProfile();
+        alert('Pedido enviado. Aguarde aprovação de um Staff.');
+    } catch (error) {
+        alert('Erro ao solicitar nick: ' + error.message);
+    }
+};
+
+window.sendOwnPasswordReset = async function () {
+    if (!currentUser?.email) return;
+    if (!confirm(`Enviar link para trocar senha em ${maskEmail(currentUser.email)}?`)) return;
+
+    try {
+        await sendPasswordResetEmail(auth, currentUser.email);
+        alert('Link de troca de senha enviado para seu e-mail.');
+    } catch (error) {
+        alert('Erro ao enviar troca de senha: ' + error.message);
+    }
+};
+
+function setInputValue(id, value) {
+    const input = document.getElementById(id);
+    if (input) input.value = value;
+}
+
 function escapeForSingleQuote(value) {
     return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
@@ -1759,7 +2373,7 @@ window.submitPresence = async function () {
             return;
         }
 
-        console.log('Salvando documento no Firestore...');
+        console.log('Salvando presença no Supabase...');
         await addDoc(collection(db, `servers/${serverToUse}/attendance`), {
             uid: currentUser.uid,
             nickname: currentUser.nickname,
