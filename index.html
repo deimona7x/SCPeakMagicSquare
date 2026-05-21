@@ -92,6 +92,9 @@
                     </select>
                 </div>
                 <div class="player-server-control" id="playerServerControl" style="display:none;">
+                    <label for="playerBlockSelect">Bloco</label>
+                    <select id="playerBlockSelect" onchange="changePlayerBlock(this.value)">
+                    </select>
                     <label for="playerServerSelect">Servidor</label>
                     <select id="playerServerSelect" onchange="changePlayerServer(this.value)">
                     </select>
@@ -544,6 +547,14 @@
                     </div>
                 </div>
             </div>
+            <div class="panel panel-purple presence-status-panel">
+                <div class="panel-header purple-header">Minhas Presenças</div>
+                <div class="panel-body">
+                    <div id="myAttendanceStatusList" class="attendance-status-list">
+                        <div class="empty-message">Nenhuma presença enviada nesta semana.</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="ranking-container" id="rankingContainer"
@@ -632,7 +643,7 @@
         </div>
 
         <div class="approvals-container" id="approvalsContainer"
-            style="display: none; padding: 20px 24px; max-width: 900px; margin: 0 auto; width: 100%;">
+            style="display: none;">
             <div class="panel panel-purple">
                 <div class="panel-header purple-header">Cadastros Pendentes</div>
                 <div class="panel-body">
@@ -670,6 +681,17 @@
                         </select>
                     </div>
                     <table class="timer-table" id="usersManagementTable">
+                        <colgroup>
+                            <col class="users-col-nickname">
+                            <col class="users-col-email">
+                            <col class="users-col-server">
+                            <col class="users-col-class">
+                            <col class="users-col-extra">
+                            <col class="users-col-nick-request">
+                            <col class="users-col-role">
+                            <col class="users-col-status">
+                            <col class="users-col-actions">
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th>Nickname</th>

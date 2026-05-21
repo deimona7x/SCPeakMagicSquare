@@ -197,6 +197,18 @@ async function addDoc(ref, data) {
     }
 }
 
+async function updateDoc(ref, data) {
+    const mapped = mapDocRef(ref);
+    if (mapped.table === 'attendance') {
+        const { error } = await supabase
+            .from('attendance')
+            .update(toAttendanceUpdateRow(data))
+            .eq('server', mapped.server)
+            .eq('id', mapped.id);
+        if (error) throw error;
+    }
+}
+
 function onSnapshot(ref, callback) {
     let active = true;
     const load = async () => {
@@ -240,6 +252,7 @@ function mapDocRef(ref) {
     if (first === 'users') return { table: 'profiles', id: second };
     if (first === 'pendingApprovals') return { table: 'pending_approvals', id: second };
     if (first === 'servers' && third === 'data') return { table: 'server_state', server: second, key: fourth };
+    if (first === 'servers' && third === 'attendance') return { table: 'attendance', server: second, id: fourth };
     return { table: first, id: second };
 }
 
@@ -385,8 +398,24 @@ function toAttendanceRow(server, data) {
         image_url: data.imageUrl,
         timestamp: data.timestamp,
         week_number: data.weekNumber,
-        points: data.points
+        points: data.points,
+        validation_status: data.validationStatus,
+        rejection_reason: data.rejectionReason,
+        validated_by: data.validatedBy,
+        validated_by_name: data.validatedByName,
+        validated_at: data.validatedAt
     };
+}
+
+function toAttendanceUpdateRow(data) {
+    return stripUndefined({
+        points: data.points,
+        validation_status: data.validationStatus,
+        rejection_reason: data.rejectionReason,
+        validated_by: data.validatedBy,
+        validated_by_name: data.validatedByName,
+        validated_at: data.validatedAt
+    });
 }
 
 function fromAttendanceRow(row) {
@@ -400,7 +429,12 @@ function fromAttendanceRow(row) {
         imageUrl: row.image_url,
         timestamp: row.timestamp,
         weekNumber: row.week_number,
-        points: row.points
+        points: row.points,
+        validationStatus: row.validation_status || 'pending',
+        rejectionReason: row.rejection_reason || '',
+        validatedBy: row.validated_by || null,
+        validatedByName: row.validated_by_name || '',
+        validatedAt: row.validated_at || null
     };
 }
 
@@ -418,6 +452,7 @@ let unsubTimers = null;
 let unsubLogs = null;
 let unsubSchedule = null;
 let unsubClaims = null;
+let unsubOwnAttendance = null;
 let usersManagementCache = [];
 let claimsData = { 7: {}, 8: {}, 9: {}, 10: {} };
 
@@ -718,8 +753,8 @@ onAuthStateChanged(auth, async (user) => {
             }
             const playerServerControl = document.getElementById('playerServerControl');
             if (playerServerControl) {
-                playerServerControl.style.display = !currentUser.isMaster && currentUser.allowedServers.length > 1 ? 'flex' : 'none';
-                if (!currentUser.isMaster) renderPlayerServerSelect();
+                playerServerControl.style.display = !currentUser.isMaster ? 'flex' : 'none';
+                if (!currentUser.isMaster) renderPlayerServerControls();
             }
 
             changeFloor(7);
@@ -739,6 +774,7 @@ onAuthStateChanged(auth, async (user) => {
         if (unsubLogs) unsubLogs();
         if (unsubSchedule) unsubSchedule();
         if (unsubClaims) unsubClaims();
+        if (unsubOwnAttendance) unsubOwnAttendance();
     }
 });
 
@@ -808,10 +844,35 @@ function renderStaffServerSelect(block, preferredServer = null) {
     }
 }
 
-function renderPlayerServerSelect() {
+function renderPlayerServerControls() {
+    const blockSelect = document.getElementById('playerBlockSelect');
+    const select = document.getElementById('playerServerSelect');
+    if (!blockSelect || !select || !currentUser) return;
+    const servers = buildAllowedServers(currentUser);
+    const groupedServers = groupServersByBlock(servers);
+    window.playerServersByBlock = groupedServers;
+    const selectedServer = normalizeServerAlias(currentServerView) || normalizeServerAlias(currentUser.server);
+    const selectedBlock = inferBlockFromServer(selectedServer) || Object.keys(groupedServers)[0] || currentUser.block;
+
+    blockSelect.innerHTML = '';
+    Object.keys(groupedServers)
+        .filter(Boolean)
+        .sort(compareBlockNames)
+        .forEach(block => {
+            const option = document.createElement('option');
+            option.value = block;
+            option.textContent = block;
+            blockSelect.appendChild(option);
+        });
+
+    blockSelect.value = selectedBlock;
+    renderPlayerServerSelect(selectedBlock, selectedServer);
+}
+
+function renderPlayerServerSelect(block, preferredServer = null) {
     const select = document.getElementById('playerServerSelect');
     if (!select || !currentUser) return;
-    const servers = buildAllowedServers(currentUser);
+    const servers = (window.playerServersByBlock?.[block] || buildAllowedServers(currentUser)).sort(compareServerNames);
 
     select.innerHTML = '';
     servers.forEach(server => {
@@ -820,8 +881,19 @@ function renderPlayerServerSelect() {
         option.textContent = server;
         select.appendChild(option);
     });
-    select.value = servers.includes(currentServerView) ? currentServerView : currentUser.server;
+    if (preferredServer && servers.includes(preferredServer)) {
+        select.value = preferredServer;
+    } else if (servers.length > 0) {
+        select.value = servers[0];
+    }
 }
+
+window.changePlayerBlock = function (block) {
+    if (!currentUser || currentUser.isMaster) return;
+    renderPlayerServerSelect(block);
+    const select = document.getElementById('playerServerSelect');
+    if (select?.value) window.changePlayerServer(select.value);
+};
 
 window.changePlayerServer = function (server) {
     if (!currentUser || currentUser.isMaster) return;
@@ -829,11 +901,19 @@ window.changePlayerServer = function (server) {
     const allowedServers = buildAllowedServers(currentUser);
     if (!allowedServers.includes(normalizedServer)) {
         alert('Você não tem acesso a este servidor.');
-        renderPlayerServerSelect();
+        renderPlayerServerControls();
         return;
     }
 
     currentServerView = normalizedServer;
+    const blockSelect = document.getElementById('playerBlockSelect');
+    const select = document.getElementById('playerServerSelect');
+    const block = inferBlockFromServer(normalizedServer);
+    if (blockSelect && blockSelect.value !== block) {
+        blockSelect.value = block;
+        renderPlayerServerSelect(block, normalizedServer);
+    }
+    if (select) select.value = normalizedServer;
     logViewCleared = false;
     updateHeader();
     listenToServerData();
@@ -913,6 +993,77 @@ function listenToServerData() {
         claimsData = docSnap.exists() ? docSnap.data() : { 7: {}, 8: {}, 9: {}, 10: {} };
         renderClaims();
     });
+
+    listenToOwnAttendanceStatus();
+}
+
+function listenToOwnAttendanceStatus() {
+    if (!currentUser || !currentServerView) return;
+    if (unsubOwnAttendance) unsubOwnAttendance();
+
+    const weekStr = getISOWeekNumber(new Date());
+    const ownAttendanceQuery = query(
+        collection(db, "servers", currentServerView, "attendance"),
+        where("uid", "==", currentUser.uid),
+        where("weekNumber", "==", weekStr)
+    );
+
+    unsubOwnAttendance = onSnapshot(ownAttendanceQuery, (snapshot) => {
+        const items = [];
+        snapshot.forEach(docSnap => {
+            const item = { ...docSnap.data(), docId: docSnap.id };
+            items.push(item);
+            maybeNotifyAttendanceStatus(item);
+        });
+        renderMyAttendanceStatus(items);
+    });
+}
+
+function maybeNotifyAttendanceStatus(item) {
+    const status = item.validationStatus || 'pending';
+    if (status === 'pending') return;
+
+    const key = `attendance-status:${item.docId}`;
+    const previous = localStorage.getItem(key);
+    if (!previous) {
+        localStorage.setItem(key, status);
+        return;
+    }
+    if (previous === status) return;
+
+    localStorage.setItem(key, status);
+    const title = status === 'approved' ? 'Presença validada' : 'Presença recusada';
+    const body = status === 'approved'
+        ? `${item.event || 'Sua presença'} foi validada.`
+        : `${item.event || 'Sua presença'} foi recusada: ${item.rejectionReason || 'sem motivo informado'}`;
+    showNotification(title, body);
+}
+
+function renderMyAttendanceStatus(items) {
+    const container = document.getElementById('myAttendanceStatusList');
+    if (!container) return;
+
+    const sortedItems = [...items].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    if (sortedItems.length === 0) {
+        container.innerHTML = '<div class="empty-message">Nenhuma presença enviada nesta semana.</div>';
+        return;
+    }
+
+    container.innerHTML = sortedItems.map(item => {
+        const status = item.validationStatus || 'pending';
+        const timestamp = new Date(item.timestamp || Date.now());
+        const dateStr = `${String(timestamp.getDate()).padStart(2, '0')}/${String(timestamp.getMonth() + 1).padStart(2, '0')} ${String(timestamp.getHours()).padStart(2, '0')}:${String(timestamp.getMinutes()).padStart(2, '0')}`;
+        return `
+            <div class="attendance-status-item ${status}">
+                <div>
+                    <div class="attendance-status-event">${escapeHtml(item.event || 'Presença')}</div>
+                    <div class="print-timestamp">${dateStr}${item.subEvent ? ` · ${escapeHtml(item.subEvent)}` : ''}</div>
+                    ${item.rejectionReason ? `<div class="attendance-reason">${escapeHtml(item.rejectionReason)}</div>` : ''}
+                </div>
+                <span class="attendance-status-badge ${status}">${getAttendanceStatusLabel(status)}</span>
+            </div>
+        `;
+    }).join('');
 }
 
 window.toggleTheme = function () {
@@ -1134,14 +1285,14 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
                         : 0;
 
                     if (currentEntry && currentEntry.uid !== currentUser.uid) {
-                        throw new Error(`${meta.label} já está clamado. Aguarde o jogador atual finalizar.`);
+                        throw new Error(`${meta.label} já está claimado. Aguarde o jogador atual finalizar.`);
                     }
                     if (currentEntry && (currentEntry.ticketCount || 1) + ticketAmount > meta.perUserMax) {
                         throw new Error(`Você já tem ${meta.perUserMax} tickets em ${meta.label}.`);
                     }
                     if (lastClaim && now - lastClaim < meta.repeatDelayMs) {
                         const waitMs = meta.repeatDelayMs - (now - lastClaim);
-                        throw new Error(`Aguarde ${formatDuration(waitMs)} para clamar ${meta.label} novamente.`);
+                        throw new Error(`Aguarde ${formatDuration(waitMs)} para claimar ${meta.label} novamente.`);
                     }
                 } else {
                     const userEntries = entries.filter(entry => entry.uid === currentUser.uid);
@@ -1155,11 +1306,11 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
                         throw new Error(`Você já tem ${meta.perUserMax} tickets em ${meta.label}.`);
                     }
                     if (userEntries.length > 0 && hasOtherPlayers) {
-                        throw new Error(`Você já está clamado em ${meta.label}. Com fila ativa, aguarde sua vez antes de clamar mais tickets.`);
+                        throw new Error(`Você já está claimado em ${meta.label}. Com fila ativa, aguarde sua vez antes de claimar mais tickets.`);
                     }
                     if (lastClaim && now - lastClaim < meta.repeatDelayMs) {
                         const waitMs = meta.repeatDelayMs - (now - lastClaim);
-                        throw new Error(`Aguarde ${formatDuration(waitMs)} para clamar ${meta.label} novamente.`);
+                        throw new Error(`Aguarde ${formatDuration(waitMs)} para claimar ${meta.label} novamente.`);
                     }
                 }
             }
@@ -1183,7 +1334,7 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
                 };
             } else {
                 if (meta.type === 'single-ticket' && entries.length > 0) {
-                    throw new Error(`${meta.label} já está clamado. Aguarde o jogador atual finalizar.`);
+                    throw new Error(`${meta.label} já está claimado. Aguarde o jogador atual finalizar.`);
                 }
                 entries.push({
                     uid: currentUser.uid,
@@ -1199,9 +1350,9 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
             data[currentFloor][targetId] = entries;
             transaction.set(claimsDoc, data, { merge: true });
         });
-        await logActivity('clamou', meta.label);
+        await logActivity('claimou', meta.label);
     } catch (error) {
-        alert(error.message || 'Erro ao clamar.');
+        alert(error.message || 'Erro ao claimar.');
     }
 };
 
@@ -1665,7 +1816,8 @@ function renderLogs() {
     }
     let html = '';
     floorLogs.forEach(log => {
-        html += `<div class="log-entry"><span class="log-time">[${log.time}]</span><span class="log-user">${log.user}</span> <span>${log.action} ${log.target}</span></div>`;
+        const action = log.action === 'clamou' ? 'claimou' : log.action;
+        html += `<div class="log-entry"><span class="log-time">[${log.time}]</span><span class="log-user">${log.user}</span> <span>${action} ${log.target}</span></div>`;
     });
     container.innerHTML = html;
 }
@@ -1711,7 +1863,7 @@ function renderClaims() {
             } else {
                 statusEl.textContent = meta.type === 'queue'
                     ? `Atual: ${entries[0].nickname} ${activeRemaining ? `(${activeRemaining})` : ''}`
-                    : `Clamado por ${entries[0].nickname} ${activeRemaining ? `(${activeRemaining})` : ''}`;
+                    : `Claimado por ${entries[0].nickname} ${activeRemaining ? `(${activeRemaining})` : ''}`;
                 statusEl.className = 'claim-status claim-busy';
             }
         }
@@ -1996,9 +2148,9 @@ function renderUsersManagementRows() {
             <td>${formatUserRole(user.role)}</td>
             <td>${status}</td>
             <td>
-                <div class="approval-actions">
-                    <button class="btn btn-secondary" onclick="promptChangeUserNickname('${user.id}', '${escapeForSingleQuote(user.nickname || '')}')">Nick</button>
-                    <button class="btn btn-purple" onclick="openServerAccessModal('${user.id}')">Servidores</button>
+                <div class="approval-actions user-management-actions">
+                    <button class="btn btn-secondary" title="Alterar nick" onclick="promptChangeUserNickname('${user.id}', '${escapeForSingleQuote(user.nickname || '')}')">Nick</button>
+                    <button class="btn btn-purple" title="Acessos extras" onclick="openServerAccessModal('${user.id}')">Servidores</button>
                     ${renderRoleActions(user.id, role)}
                     ${status === 'disabled'
                         ? `<button class="btn btn-green" onclick="setUserAccountStatus('${user.id}', 'approved')">Ativar</button>`
@@ -2255,7 +2407,7 @@ window.saveServerAccess = async function (uid, primaryServer) {
         if (uid === currentUser.uid) {
             currentUser.extraServers = extraServers;
             currentUser.allowedServers = buildAllowedServers(currentUser);
-            renderPlayerServerSelect();
+            renderPlayerServerControls();
         }
 
         window.closeServerAccessModal();
@@ -2449,7 +2601,12 @@ window.submitPresence = async function () {
             imageUrl: imageUrl,
             timestamp: now.getTime(),
             weekNumber: weekStr,
-            points: 1
+            points: 1,
+            validationStatus: 'pending',
+            rejectionReason: '',
+            validatedBy: null,
+            validatedByName: '',
+            validatedAt: null
         });
         console.log('Documento salvo com sucesso!');
 
@@ -2509,7 +2666,7 @@ window.loadWeeklyRanking = async function () {
                 };
             }
             
-            playersMap[nickname].points += (d.points || 1);
+            playersMap[nickname].points += (d.points ?? 1);
             playersMap[nickname].presences += 1;
             
             // Guarda documento individual para validação
@@ -2551,6 +2708,136 @@ window.loadWeeklyRanking = async function () {
     }
 };
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value).replaceAll('`', '&#096;');
+}
+
+function getImagePreviewUrl(url) {
+    if (!url) return '';
+    try {
+        const parsed = new URL(url);
+        const cleanPath = parsed.pathname.split('?')[0];
+        if (/\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(cleanPath)) return url;
+        if (isImgurHost(parsed.hostname)) {
+            const parts = cleanPath.split('/').filter(Boolean);
+            const imageId = parts[0];
+            if (parts.length === 1 && imageId) {
+                return `https://i.imgur.com/${imageId}.jpg`;
+            }
+        }
+        return '';
+    } catch {
+        return '';
+    }
+}
+
+function getImgurEmbedUrl(url) {
+    if (!url) return '';
+    try {
+        const parsed = new URL(url);
+        if (!isImgurHost(parsed.hostname)) return '';
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        if (parts.length >= 2 && ['a', 'gallery'].includes(parts[0])) {
+            return `https://imgur.com/${parts[0]}/${parts[1]}/embed?pub=true`;
+        }
+        if (parts.length === 1 && parts[0] && !/\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(parts[0])) {
+            return `https://imgur.com/${parts[0]}/embed?pub=true`;
+        }
+        return '';
+    } catch {
+        return '';
+    }
+}
+
+function isImgurHost(hostname) {
+    return ['imgur.com', 'www.imgur.com', 'm.imgur.com'].includes(hostname);
+}
+
+function renderPrintPreviewMedia(url, className, fallbackId = '') {
+    const previewUrl = getImagePreviewUrl(url);
+    if (previewUrl) {
+        const fallback = fallbackId ? ` document.getElementById('${fallbackId}').style.display='block';` : '';
+        return `<img src="${escapeAttribute(previewUrl)}" alt="Preview da print" class="${className}" loading="lazy" onerror="this.style.display='none';${fallback}">`;
+    }
+
+    const embedUrl = getImgurEmbedUrl(url);
+    if (embedUrl) {
+        return `<iframe src="${escapeAttribute(embedUrl)}" title="Preview da print" class="${className} print-preview-embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+    }
+
+    return '';
+}
+
+function getAttendanceStatusLabel(status) {
+    const labels = {
+        approved: 'Validada',
+        rejected: 'Recusada',
+        pending: 'Pendente'
+    };
+    return labels[status] || labels.pending;
+}
+
+window.validateAttendance = async function (attendanceId, status) {
+    if (!currentUser?.isMaster || !currentServerView) {
+        alert('Apenas Staff/Master pode validar presenças.');
+        return;
+    }
+
+    const isRejected = status === 'rejected';
+    let reason = '';
+    if (isRejected) {
+        reason = prompt('Informe o motivo da recusa:')?.trim() || '';
+        if (!reason) {
+            alert('Para recusar, informe o motivo.');
+            return;
+        }
+    }
+
+    try {
+        await updateDoc(doc(db, 'servers', currentServerView, 'attendance', attendanceId), {
+            validationStatus: status,
+            rejectionReason: isRejected ? reason : '',
+            validatedBy: currentUser.uid,
+            validatedByName: currentUser.nickname,
+            validatedAt: Date.now(),
+            points: status === 'approved' ? 1 : 0
+        });
+        await window.loadWeeklyRanking();
+    } catch (error) {
+        console.error('Erro ao validar presença:', error);
+        alert('Erro ao validar presença: ' + error.message);
+    }
+};
+
+window.openPrintPreviewModal = function (imageUrl, playerName = 'Jogador', eventName = 'Presença') {
+    const modal = document.getElementById('playerPrintsModal');
+    const overlay = document.getElementById('modalOverlay');
+    const modalTitle = document.getElementById('modalPlayerName');
+    const modalContent = document.getElementById('modalContent');
+    const mediaHtml = renderPrintPreviewMedia(imageUrl, 'print-preview-image', 'printPreviewFallback');
+
+    modalTitle.textContent = `Print - ${playerName}`;
+    modalContent.innerHTML = `
+        <div class="print-preview-modal-body">
+            <div class="print-event">${escapeHtml(eventName)}</div>
+            ${mediaHtml}
+            <div id="printPreviewFallback" class="empty-message" style="display:${mediaHtml ? 'none' : 'block'};">Não foi possível carregar preview automático deste link.</div>
+            <a href="${escapeAttribute(imageUrl)}" target="_blank" rel="noopener noreferrer" class="print-link">Abrir link original</a>
+        </div>
+    `;
+    modal.classList.add('show');
+    overlay.classList.add('show');
+};
+
 function createAttendanceDetailsTable(attendanceDocs) {
     // Verificar se o container de detalhes existe, senão criar
     let detailsContainer = document.getElementById('attendanceDetailsContainer');
@@ -2574,7 +2861,9 @@ function createAttendanceDetailsTable(attendanceDocs) {
                                 <th>Jogador</th>
                                 <th>Evento</th>
                                 <th>Data/Hora</th>
-                                <th>Link de Validação</th>
+                                <th>Print</th>
+                                <th>Status</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="attendanceDetailsBody">
@@ -2597,15 +2886,32 @@ function createAttendanceDetailsTable(attendanceDocs) {
         
         attendanceDocs.forEach(doc => {
             const tr = document.createElement('tr');
+            tr.className = `attendance-row attendance-${doc.validationStatus || 'pending'}`;
             const playerName = `${doc.nickname} (${doc.block}${doc.server})`;
             const eventName = doc.event || 'N/A';
             const timestamp = new Date(doc.timestamp);
             const dateStr = `${String(timestamp.getDate()).padStart(2, '0')}/${String(timestamp.getMonth() + 1).padStart(2, '0')} ${String(timestamp.getHours()).padStart(2, '0')}:${String(timestamp.getMinutes()).padStart(2, '0')}`;
             
             const link = doc.imageUrl || '';
-            const linkDisplay = link ? `<a href="${link}" target="_blank" style="color:var(--purple-primary); text-decoration:underline;">Ver Print</a>` : '<span style="color:var(--text-muted);">Sem link</span>';
+            const previewHtml = renderPrintPreviewMedia(link, 'attendance-thumb');
+            const linkDisplay = link
+                ? `<button class="btn-preview-print" onclick="window.openPrintPreviewModal('${escapeAttribute(link)}', '${escapeAttribute(playerName)}', '${escapeAttribute(eventName)}')">Ver aqui</button>
+                   <a href="${escapeAttribute(link)}" target="_blank" rel="noopener noreferrer" class="print-link">Abrir link</a>
+                   ${previewHtml}`
+                : '<span style="color:var(--text-muted);">Sem link</span>';
+            const status = doc.validationStatus || 'pending';
+            const statusText = getAttendanceStatusLabel(status);
+            const statusHtml = `<span class="attendance-status-badge ${status}">${statusText}</span>${doc.rejectionReason ? `<div class="attendance-reason">${escapeHtml(doc.rejectionReason)}</div>` : ''}`;
+            const approveDisabled = status === 'approved' ? 'disabled' : '';
+            const rejectDisabled = status === 'rejected' ? 'disabled' : '';
+            const actionsHtml = `
+                <div class="attendance-validation-actions">
+                    <button class="attendance-flag approved" ${approveDisabled} onclick="window.validateAttendance('${doc.docId}', 'approved')">✓</button>
+                    <button class="attendance-flag rejected" ${rejectDisabled} onclick="window.validateAttendance('${doc.docId}', 'rejected')">✕</button>
+                </div>
+            `;
             
-            tr.innerHTML = `<td>${playerName}</td><td>${eventName}</td><td>${dateStr}</td><td>${linkDisplay}</td>`;
+            tr.innerHTML = `<td>${escapeHtml(playerName)}</td><td>${escapeHtml(eventName)}</td><td>${dateStr}</td><td>${linkDisplay}</td><td>${statusHtml}</td><td>${actionsHtml}</td>`;
             detailsContainer.appendChild(tr);
         });
     }
@@ -2696,10 +3002,13 @@ window.openPlayerPrintsModal = async function (playerNickname, weekStr) {
         snapshot.forEach(doc => {
             const d = doc.data();
             prints.push({
+                docId: doc.id,
                 event: d.event || 'Evento desconhecido',
                 subEvent: d.subEvent || null,
                 timestamp: d.timestamp || new Date(),
-                imageUrl: d.imageUrl || null
+                imageUrl: d.imageUrl || null,
+                validationStatus: d.validationStatus || 'pending',
+                rejectionReason: d.rejectionReason || ''
             });
         });
         
@@ -2724,18 +3033,29 @@ window.openPlayerPrintsModal = async function (playerNickname, weekStr) {
             const dateStr = `${String(timestamp.getDate()).padStart(2, '0')}/${String(timestamp.getMonth() + 1).padStart(2, '0')} ${String(timestamp.getHours()).padStart(2, '0')}:${String(timestamp.getMinutes()).padStart(2, '0')}`;
             
             const linkHtml = print.imageUrl 
-                ? `<a href="${print.imageUrl}" target="_blank" class="print-link">🔗 Ver Print</a>`
+                ? `<button class="btn-preview-print" onclick="window.openPrintPreviewModal('${escapeAttribute(print.imageUrl)}', '${escapeAttribute(playerNickname)}', '${escapeAttribute(print.event)}')">Ver aqui</button>
+                   <a href="${escapeAttribute(print.imageUrl)}" target="_blank" rel="noopener noreferrer" class="print-link">Abrir link</a>`
                 : '<span style="color:var(--text-muted); font-size:0.85rem;">Sem link</span>';
+            const previewHtml = renderPrintPreviewMedia(print.imageUrl, 'print-preview-card-image');
 
             const subEventHtml = print.subEvent
-                ? `<div class="print-subevent">🕐 ${print.subEvent}</div>`
+                ? `<div class="print-subevent">🕐 ${escapeHtml(print.subEvent)}</div>`
                 : '';
+            const statusHtml = `<span class="attendance-status-badge ${print.validationStatus}">${getAttendanceStatusLabel(print.validationStatus)}</span>${print.rejectionReason ? `<div class="attendance-reason">${escapeHtml(print.rejectionReason)}</div>` : ''}`;
+            const validationActions = currentUser?.isMaster ? `
+                <div class="attendance-validation-actions">
+                    <button class="attendance-flag approved" ${print.validationStatus === 'approved' ? 'disabled' : ''} onclick="window.validateAttendance('${print.docId}', 'approved')">✓</button>
+                    <button class="attendance-flag rejected" ${print.validationStatus === 'rejected' ? 'disabled' : ''} onclick="window.validateAttendance('${print.docId}', 'rejected')">✕</button>
+                </div>
+            ` : '';
 
             printEl.innerHTML = `
-                <div class="print-event">${print.event}</div>
+                <div class="print-event">${escapeHtml(print.event)}</div>
                 ${subEventHtml}
                 <div class="print-timestamp">${dateStr}</div>
-                <div>${linkHtml}</div>
+                ${previewHtml}
+                <div class="print-actions-line">${linkHtml}</div>
+                <div class="print-validation-line">${statusHtml}${validationActions}</div>
             `;
             
             modalContent.appendChild(printEl);

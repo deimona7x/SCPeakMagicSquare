@@ -64,8 +64,20 @@ create table if not exists public.attendance (
     timestamp bigint not null,
     week_number text not null,
     points integer not null default 1,
+    validation_status text not null default 'pending',
+    rejection_reason text,
+    validated_by uuid references auth.users(id),
+    validated_by_name text,
+    validated_at bigint,
     created_at timestamptz not null default now()
 );
+
+alter table public.attendance
+    add column if not exists validation_status text not null default 'pending',
+    add column if not exists rejection_reason text,
+    add column if not exists validated_by uuid references auth.users(id),
+    add column if not exists validated_by_name text,
+    add column if not exists validated_at bigint;
 
 create index if not exists profiles_status_idx on public.profiles(status);
 create index if not exists profiles_nickname_idx on public.profiles(nickname);
