@@ -446,6 +446,7 @@ function stripUndefined(value) {
 let currentUser = null;
 let currentServerView = null;
 let currentFloor = 7;
+let currentTimerView = 'peak';
 let timersData = { 7: {}, 8: {}, 9: {}, 10: {} };
 let activityLogs = [];
 let unsubTimers = null;
@@ -917,7 +918,7 @@ window.changePlayerServer = function (server) {
     logViewCleared = false;
     updateHeader();
     listenToServerData();
-    changeFloor(currentFloor);
+    setTimerView(currentTimerView);
 };
 
 window.changeStaffBlock = function (block) {
@@ -948,7 +949,7 @@ window.changeStaffServer = function (server) {
     logViewCleared = false;
     updateHeader();
     listenToServerData();
-    changeFloor(currentFloor);
+    setTimerView(currentTimerView);
 };
 
 function listenToServerData() {
@@ -1179,8 +1180,39 @@ window.performLogout = async function () {
     try { await signOut(auth); window.switchAuthTab('login'); } catch (error) { console.error(error); }
 };
 
+function getTimerScope() {
+    return String(currentFloor);
+}
+
+function getTimerScopeLabel() {
+    return `${currentTimerView === 'square' ? 'Praça' : 'Pico'} Piso ${currentFloor}`;
+}
+
+function updateTimerScopeLabel() {
+    const label = document.getElementById('currentFloorLog');
+    if (label) label.textContent = getTimerScopeLabel();
+}
+
+function setTimerView(viewName) {
+    currentTimerView = viewName === 'square' ? 'square' : 'peak';
+    const mainGrid = document.getElementById('mainGrid');
+    if (mainGrid) {
+        mainGrid.classList.toggle('peak-view', currentTimerView === 'peak');
+        mainGrid.classList.toggle('square-view', currentTimerView === 'square');
+    }
+    document.getElementById('floorNav').style.display = 'flex';
+    logViewCleared = false;
+    updateTimerScopeLabel();
+    refreshTimerDisplay();
+    updateActiveTimers();
+    renderLogs();
+    renderClaims();
+}
+
 window.switchMainTab = function (tabName) {
-    document.getElementById('tabTimers').classList.remove('active');
+    const normalizedTabName = tabName === 'timers' ? 'peak' : tabName;
+    document.getElementById('tabPeak').classList.remove('active');
+    document.getElementById('tabSquare').classList.remove('active');
     document.getElementById('tabSchedule').classList.remove('active');
     document.getElementById('tabPresence').classList.remove('active');
     document.getElementById('tabProfile').classList.remove('active');
@@ -1196,27 +1228,27 @@ window.switchMainTab = function (tabName) {
     document.getElementById('approvalsContainer').style.display = 'none';
     document.getElementById('rankingContainer').style.display = 'none';
 
-    if (tabName === 'timers') {
-        document.getElementById('tabTimers').classList.add('active');
-        document.getElementById('floorNav').style.display = 'flex';
+    if (normalizedTabName === 'peak' || normalizedTabName === 'square') {
+        document.getElementById(normalizedTabName === 'peak' ? 'tabPeak' : 'tabSquare').classList.add('active');
         document.getElementById('activeTimersBar').style.display = 'flex';
         document.getElementById('mainGrid').style.display = 'grid';
-    } else if (tabName === 'schedule') {
+        setTimerView(normalizedTabName);
+    } else if (normalizedTabName === 'schedule') {
         document.getElementById('tabSchedule').classList.add('active');
         document.getElementById('scheduleContainer').style.display = 'block';
         renderRegionalSchedule();
-    } else if (tabName === 'presence') {
+    } else if (normalizedTabName === 'presence') {
         document.getElementById('tabPresence').classList.add('active');
         document.getElementById('presenceContainer').style.display = 'block';
-    } else if (tabName === 'profile') {
+    } else if (normalizedTabName === 'profile') {
         document.getElementById('tabProfile').classList.add('active');
         document.getElementById('profileContainer').style.display = 'block';
         renderOwnProfile();
-    } else if (tabName === 'approvals') {
+    } else if (normalizedTabName === 'approvals') {
         document.getElementById('tabApprovals').classList.add('active');
         document.getElementById('approvalsContainer').style.display = 'block';
         window.loadPendingApprovals();
-    } else if (tabName === 'ranking') {
+    } else if (normalizedTabName === 'ranking') {
         document.getElementById('tabRanking').classList.add('active');
         document.getElementById('rankingContainer').style.display = 'block';
         window.loadWeeklyRanking();
@@ -1227,7 +1259,7 @@ window.changeFloor = function (floor) {
     currentFloor = floor;
     // CORRIGIDO: quando muda de piso, reativa a exibição de logs
     logViewCleared = false;
-    document.getElementById('currentFloorLog').textContent = floor;
+    updateTimerScopeLabel();
     document.querySelectorAll('.floor-btn').forEach(btn => {
         btn.classList.remove('active');
         if (btn.textContent.includes(floor)) btn.classList.add('active');
@@ -1241,12 +1273,13 @@ window.changeFloor = function (floor) {
 window.registerKill = async function (bossId, cooldownMinutes) {
     if (!currentUser || !currentServerView) return;
     const now = new Date();
+    const timerScope = getTimerScope();
     const respawnTime = bossId === 'lider3'
         ? getNextLeader3Respawn(now)
         : new Date(now.getTime() + cooldownMinutes * 60 * 1000);
 
-    if (!timersData[currentFloor]) timersData[currentFloor] = {};
-    timersData[currentFloor][bossId] = {
+    if (!timersData[timerScope]) timersData[timerScope] = {};
+    timersData[timerScope][bossId] = {
         killedAt: now.getTime(),
         respawnAt: respawnTime.getTime(),
         cooldown: cooldownMinutes,
@@ -1270,6 +1303,7 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
     const meta = claimMeta[targetId];
     if (!meta) return;
 
+    const timerScope = getTimerScope();
     ticketAmount = Math.max(1, Math.min(3, Number(ticketAmount) || 1));
     const hasUnlimitedClaimTickets = currentUser.isMaster;
     const now = Date.now();
@@ -1279,8 +1313,8 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
         await runTransaction(db, async (transaction) => {
             const snap = await transaction.get(claimsDoc);
             const data = snap.exists() ? snap.data() : {};
-            if (!data[currentFloor]) data[currentFloor] = {};
-            let entries = Array.isArray(data[currentFloor][targetId]) ? [...data[currentFloor][targetId]] : [];
+            if (!data[timerScope]) data[timerScope] = {};
+            let entries = Array.isArray(data[timerScope][targetId]) ? [...data[timerScope][targetId]] : [];
             entries = normalizeClaimEntries(entries, meta, now);
 
             if (!currentUser.isMaster) {
@@ -1354,7 +1388,7 @@ window.claimTarget = async function (targetId, ticketAmount = 1) {
                     role: currentUser.role || 'user'
                 });
             }
-            data[currentFloor][targetId] = entries;
+            data[timerScope][targetId] = entries;
             transaction.set(claimsDoc, data, { merge: true });
         });
         await logActivity('claimou', meta.label);
@@ -1368,12 +1402,13 @@ window.finishClaim = async function (targetId) {
     const meta = claimMeta[targetId];
     if (!meta) return;
 
+    const timerScope = getTimerScope();
     const claimsDoc = doc(db, "servers", currentServerView, "data", "claims");
     try {
         await runTransaction(db, async (transaction) => {
             const snap = await transaction.get(claimsDoc);
             const data = snap.exists() ? snap.data() : {};
-            let entries = Array.isArray(data[currentFloor]?.[targetId]) ? [...data[currentFloor][targetId]] : [];
+            let entries = Array.isArray(data[timerScope]?.[targetId]) ? [...data[timerScope][targetId]] : [];
             entries = normalizeClaimEntries(entries, meta, Date.now());
             const removeIndex = currentUser.isMaster
                 ? 0
@@ -1385,8 +1420,8 @@ window.finishClaim = async function (targetId) {
 
             entries.splice(removeIndex, 1);
             entries = promoteNextClaim(entries, Date.now());
-            if (!data[currentFloor]) data[currentFloor] = {};
-            data[currentFloor][targetId] = entries;
+            if (!data[timerScope]) data[timerScope] = {};
+            data[timerScope][targetId] = entries;
             transaction.set(claimsDoc, data, { merge: true });
         });
         await logActivity('finalizou claim de', meta.label);
@@ -1402,8 +1437,9 @@ window.clearAllTimers = async function () {
         alert('Apenas líderes e administradores podem limpar todos os timers.');
         return;
     }
-    if (!confirm(`Limpar todos os timers do Piso ${currentFloor}?`)) return;
-    timersData[currentFloor] = {};
+    const timerScope = getTimerScope();
+    if (!confirm(`Limpar todos os timers de ${getTimerScopeLabel()}?`)) return;
+    timersData[timerScope] = {};
     try {
         await setDoc(doc(db, "servers", currentServerView, "data", "timers"), timersData, { merge: true });
         await logActivity('limpou', 'todos os timers');
@@ -1822,7 +1858,7 @@ async function logActivity(action, target) {
             server: currentUser.server,
             action,
             target,
-            floor: currentFloor,
+            floor: getTimerScope(),
             timestamp: now.getTime()
         });
     } catch (e) { }
@@ -1831,7 +1867,8 @@ async function logActivity(action, target) {
 function renderLogs() {
     const container = document.getElementById('activityLog');
     if (!container) return;
-    const floorLogs = activityLogs.filter(log => log.floor === currentFloor);
+    const timerScope = getTimerScope();
+    const floorLogs = activityLogs.filter(log => String(log.floor) === timerScope);
     if (floorLogs.length === 0) {
         container.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">Sem logs.</span>';
         return;
@@ -1845,7 +1882,8 @@ function renderLogs() {
 }
 
 function renderClaims() {
-    const floorClaims = claimsData[currentFloor] || {};
+    const timerScope = getTimerScope();
+    const floorClaims = claimsData[timerScope] || {};
     const now = Date.now();
 
     Object.keys(claimMeta).forEach(targetId => {
@@ -1860,7 +1898,7 @@ function renderClaims() {
         );
         const activeRemaining = entries[0]?.activeUntil ? formatCountdown(entries[0].activeUntil - now) : null;
         const cardTimerEl = document.getElementById(`${targetId}-nasceu`);
-        const spawnTimer = timersData[currentFloor]?.[targetId];
+        const spawnTimer = timersData[timerScope]?.[targetId];
         const hasActiveSpawnTimer = spawnTimer && spawnTimer.respawnAt > now;
 
         if (cardTimerEl?.classList.contains('magic-timer') && !hasActiveSpawnTimer) {
@@ -1940,7 +1978,8 @@ function refreshTimerDisplay() {
         el.textContent = '--:--:--';
         el.classList.remove('timer-ready');
     });
-    const floorTimers = timersData[currentFloor] || {};
+    const timerScope = getTimerScope();
+    const floorTimers = timersData[timerScope] || {};
     for (const [bossId, timer] of Object.entries(floorTimers)) {
         const m = document.getElementById(`${bossId}-morreu`);
         const n = document.getElementById(`${bossId}-nasceu`);
@@ -1960,7 +1999,7 @@ function updateActiveTimers() {
 
     const now = Date.now();
     let chips = [];
-    const floorTimers = timersData[currentFloor] || {};
+    const floorTimers = timersData[getTimerScope()] || {};
 
     document.querySelectorAll('.live-countdown').forEach(el => {
         el.textContent = 'PRONTO';
@@ -2079,8 +2118,9 @@ function showNotification(title, body) {
 }
 
 window.exportTimers = function () {
-    let text = `=== TIMERS PISO ${currentFloor} (${currentServerView}) ===\n`;
-    for (const [id, timer] of Object.entries(timersData[currentFloor] || {})) {
+    const timerScope = getTimerScope();
+    let text = `=== TIMERS ${getTimerScopeLabel().toUpperCase()} (${currentServerView}) ===\n`;
+    for (const [id, timer] of Object.entries(timersData[timerScope] || {})) {
         const meta = timerMeta[id];
         if (meta) text += `${meta.label}: Morreu ${formatTimeFromMs(timer.killedAt)} | Nasce ${formatTimeFromMs(timer.respawnAt)}\n`;
     }
@@ -2791,9 +2831,10 @@ window.loadWeeklyRanking = async function () {
             else if (i === 2) { pos = '🥉'; medal = '3º'; }
             
             const displayPos = medal ? `${pos} ${medal}` : pos;
-            const playerDisplay = `${p.nickname} (${p.block}${p.server})`;
+            const playerDisplay = formatPlayerDisplayName(p.nickname, p.block, p.server);
+            const serverDisplay = formatServerDisplay(p.block, p.server);
             
-            tr.innerHTML = `<td>${displayPos}</td><td><span style="cursor:pointer; color:var(--purple-primary);" onclick="window.openPlayerPrintsModal('${p.nickname}', '${weekStr}')">${playerDisplay}</span></td><td>${p.server}</td><td>${p.presences}</td><td><strong>${p.points} pts</strong></td>`;
+            tr.innerHTML = `<td>${displayPos}</td><td><span style="cursor:pointer; color:var(--purple-primary);" onclick="window.openPlayerPrintsModal(${inlineStringArg(p.nickname)}, ${inlineStringArg(weekStr)})">${escapeHtml(playerDisplay)}</span></td><td>${escapeHtml(serverDisplay)}</td><td>${p.presences}</td><td><strong>${p.points} pts</strong></td>`;
             tbody.appendChild(tr);
         });
         
@@ -2820,6 +2861,25 @@ function escapeHtml(value) {
 
 function escapeAttribute(value) {
     return escapeHtml(value).replaceAll('`', '&#096;');
+}
+
+function inlineStringArg(value) {
+    return escapeAttribute(JSON.stringify(String(value ?? '')));
+}
+
+function formatServerDisplay(block, server) {
+    const normalizedServer = normalizeServerAlias(server);
+    const normalizedBlock = normalizeServerName(block);
+    if (isValidServerName(normalizedServer)) return normalizedServer;
+    if (!normalizedServer || normalizedServer === 'N/A') return normalizedBlock || 'N/A';
+    if (normalizedBlock && normalizedBlock !== 'N/A' && !normalizedServer.startsWith(normalizedBlock)) {
+        return `${normalizedBlock}${normalizedServer}`;
+    }
+    return normalizedServer;
+}
+
+function formatPlayerDisplayName(nickname, block, server) {
+    return `${nickname || 'N/A'} (${formatServerDisplay(block, server)})`;
 }
 
 function getImagePreviewUrl(url) {
@@ -2988,7 +3048,7 @@ function createAttendanceDetailsTable(attendanceDocs) {
         attendanceDocs.forEach(doc => {
             const tr = document.createElement('tr');
             tr.className = `attendance-row attendance-${doc.validationStatus || 'pending'}`;
-            const playerName = `${doc.nickname} (${doc.block}${doc.server})`;
+            const playerName = formatPlayerDisplayName(doc.nickname, doc.block, doc.server);
             const eventName = doc.event || 'N/A';
             const timestamp = new Date(doc.timestamp);
             const dateStr = `${String(timestamp.getDate()).padStart(2, '0')}/${String(timestamp.getMonth() + 1).padStart(2, '0')} ${String(timestamp.getHours()).padStart(2, '0')}:${String(timestamp.getMinutes()).padStart(2, '0')}`;
@@ -3051,12 +3111,12 @@ async function createTop10Scroller(ranking) {
         `;
         
         const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
-        const playerName = `${player.block}${player.server}`;
+        const playerName = formatServerDisplay(player.block, player.server);
         
         card.innerHTML = `
             <div style="font-size:24px; font-weight:bold; color:var(--gold-primary); margin-bottom:8px;">${medal}</div>
-            <div class="top10-card-name" onclick="window.openPlayerPrintsModal('${player.nickname}', '${weekStr}')">${player.nickname}</div>
-            <div style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:10px;">${playerName}</div>
+            <div class="top10-card-name" onclick="window.openPlayerPrintsModal(${inlineStringArg(player.nickname)}, ${inlineStringArg(weekStr)})">${escapeHtml(player.nickname)}</div>
+            <div style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:10px;">${escapeHtml(playerName)}</div>
             <div style="background:var(--purple-bg); padding:8px; border-radius:6px; margin-top:10px;">
                 <span style="color:var(--purple-primary); font-weight:bold;">${player.points} Pontos</span>
             </div>

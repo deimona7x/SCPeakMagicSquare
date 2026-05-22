@@ -74,7 +74,8 @@
             <div class="header-left">
                 <span class="header-title">Peak & Magic</span>
                 <nav class="main-tab-nav">
-                    <button class="main-tab-btn active" id="tabTimers" onclick="switchMainTab('timers')">Timers</button>
+                    <button class="main-tab-btn active" id="tabPeak" onclick="switchMainTab('peak')">Pico</button>
+                    <button class="main-tab-btn" id="tabSquare" onclick="switchMainTab('square')">Praça</button>
                     <button class="main-tab-btn" id="tabSchedule" onclick="switchMainTab('schedule')">Horários</button>
                     <button class="main-tab-btn" id="tabPresence" onclick="switchMainTab('presence')">Presença</button>
                     <button class="main-tab-btn" id="tabProfile" onclick="switchMainTab('profile')">Perfil</button>
@@ -121,7 +122,7 @@
             <button class="floor-btn" onclick="changeFloor(10)">PISO 10</button>
         </nav>
 
-        <div class="main-grid" id="mainGrid">
+        <div class="main-grid peak-view" id="mainGrid">
 
             <div class="left-column">
 
@@ -234,16 +235,9 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="center-column">
-                <div class="map-container">
-                    <div class="map-image">
-                        <img src="map_8f.png" alt="Mapa Pico Secreto - Bosses e Recursos" class="map-img">
-                    </div>
-                </div>
-
-                <div class="resources-row">
+                <div class="zone-title zone-title-peak">Pico Secreto</div>
+                <div class="resources-row peak-resources">
                     <div class="panel panel-resource">
                         <div class="panel-header gold-resource-header">Minério Dourado <span
                                 class="cooldown-badge">1h</span></div>
@@ -288,9 +282,18 @@
                 </div>
             </div>
 
+            <div class="center-column">
+                <div class="map-container">
+                    <div class="map-image">
+                        <img src="map_8f.png" alt="Mapa Pico Secreto - Bosses e Recursos" class="map-img">
+                    </div>
+                </div>
+            </div>
+
             <div class="right-column">
 
                 <div class="magic-sidebar">
+                    <div class="zone-title zone-title-praca">Praça Mágica</div>
                     <div class="magic-card magic-card-purple">
                         <div class="magic-icon">💎</div>
                         <div class="magic-content">
@@ -738,7 +741,7 @@
         <footer class="main-footer">
             <div class="activity-log-container">
                 <div class="activity-log-header">
-                    <span>📜 Log de Atividades (Piso <span id="currentFloorLog">7</span>)</span>
+                    <span>📜 Log de Atividades (<span id="currentFloorLog">Pico 7</span>)</span>
                     <!-- CORRIGIDO: botão agora esconde entradas na tela sem apagar da nuvem -->
                     <button class="btn btn-small" onclick="clearLogView()">Limpar Vista</button>
                 </div>

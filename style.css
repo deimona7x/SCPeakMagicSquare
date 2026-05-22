@@ -189,6 +189,25 @@ body {
     flex: 1;
 }
 
+.main-grid.peak-view {
+    grid-template-columns: 1fr 1.3fr;
+}
+
+.main-grid.square-view {
+    grid-template-columns: minmax(320px, 1180px);
+    justify-content: center;
+}
+
+.main-grid.peak-view .right-column,
+.main-grid.square-view .left-column,
+.main-grid.square-view .center-column {
+    display: none;
+}
+
+.main-grid.square-view .right-column {
+    gap: 18px;
+}
+
 /* ============================================
    PANELS
    ============================================ */
@@ -562,6 +581,35 @@ body {
     margin-top: 16px;
 }
 
+.peak-resources {
+    margin-top: 0;
+}
+
+.zone-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 8px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: rgba(15, 23, 42, 0.62);
+}
+
+.zone-title-peak {
+    color: var(--gold-primary);
+    border-color: rgba(234, 179, 8, 0.42);
+    text-shadow: 0 0 12px var(--gold-glow);
+}
+
+.zone-title-praca {
+    color: var(--purple-primary);
+    border-color: rgba(168, 85, 247, 0.42);
+    text-shadow: 0 0 12px var(--purple-glow);
+}
+
 .panel-resource {
     min-width: 0;
 }
@@ -928,6 +976,28 @@ body {
         grid-template-columns: 1fr 1fr;
     }
 
+    .main-grid.peak-view {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .main-grid.square-view {
+        grid-template-columns: minmax(320px, 900px);
+    }
+
+    .square-view .magic-sidebar,
+    .square-view .tempo-info {
+        grid-template-columns: 1fr;
+    }
+
+    .square-view .leaders-panel {
+        display: block;
+    }
+
+    .square-view .praca-claim {
+        border-right: 0;
+        border-bottom: 1px solid var(--border-default);
+    }
+
     .center-column {
         grid-column: span 2;
     }
@@ -945,6 +1015,21 @@ body {
 @media (max-width: 768px) {
     .main-grid {
         grid-template-columns: 1fr;
+    }
+
+    .main-grid.peak-view,
+    .main-grid.square-view {
+        grid-template-columns: 1fr;
+    }
+
+    .square-view .leaders-compact {
+        grid-template-columns: 1fr;
+    }
+
+    .leader-compact,
+    .leader-compact:last-child {
+        border-right: 0;
+        border-bottom: 1px solid var(--border-default);
     }
 
     .center-column {
@@ -1486,6 +1571,18 @@ body {
     gap: 14px;
 }
 
+.square-view .magic-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 16px;
+}
+
+.square-view .zone-title-praca,
+.square-view .leaders-panel {
+    grid-column: 1 / -1;
+}
+
 .magic-card {
     display: grid;
     grid-template-columns: 72px 1fr;
@@ -1496,6 +1593,23 @@ body {
     border: 1px solid var(--border-default);
     background: linear-gradient(135deg, rgba(26, 31, 46, 0.96), rgba(17, 24, 39, 0.86));
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.square-view .magic-card {
+    min-height: 230px;
+    align-items: start;
+}
+
+.square-view .magic-icon {
+    margin-top: 2px;
+}
+
+.square-view .claim-list {
+    min-height: 36px;
+}
+
+.square-view .claim-actions {
+    margin-top: 2px;
 }
 
 .magic-card-purple {
@@ -1686,6 +1800,39 @@ body {
 
 .praca-claim .btn {
     padding: 7px 12px;
+}
+
+.square-view .leaders-panel {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+}
+
+.square-view .leaders-title {
+    grid-column: 1 / -1;
+}
+
+.square-view .praca-claim {
+    border-right: 1px solid var(--border-default);
+    border-bottom: 0;
+}
+
+.square-view .leaders-compact {
+    min-width: 0;
+}
+
+.square-view .right-column > .panel-info {
+    max-width: none;
+}
+
+.square-view .tempo-info {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.square-view .tempo-item {
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
 }
 
 .approval-actions {
@@ -2652,4 +2799,32 @@ body {
     background: linear-gradient(270deg, var(--bg-primary), transparent);
     z-index: 10;
     pointer-events: none;
+}
+
+@media (max-width: 1200px) {
+    .square-view .magic-sidebar,
+    .square-view .tempo-info {
+        grid-template-columns: 1fr;
+    }
+
+    .square-view .leaders-panel {
+        display: block;
+    }
+
+    .square-view .praca-claim {
+        border-right: 0;
+        border-bottom: 1px solid var(--border-default);
+    }
+}
+
+@media (max-width: 768px) {
+    .square-view .leaders-compact {
+        grid-template-columns: 1fr;
+    }
+
+    .square-view .leader-compact,
+    .square-view .leader-compact:last-child {
+        border-right: 0;
+        border-bottom: 1px solid var(--border-default);
+    }
 }
